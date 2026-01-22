@@ -1,8 +1,11 @@
 # Google Drive Data Download Script
-# Downloads data files from Google Drive to the local data/ folder
+# Downloads data files from Google Drive to Box
 # Uses OAuth authentication
 
-if (!require("googledrive")) install.packages("googledrive")
+if (!require("googledrive")) {
+  options(repos = c(CRAN = "https://cloud.r-project.org"))
+  install.packages("googledrive")
+}
 library(googledrive)
 
 drive_auth()
@@ -83,6 +86,28 @@ download_specific_file <- function(file_path, local_path = data_path) {
   )
 }
 
+download_file_from_subfolder <- function(folder_name, file_name, local_path = data_path) {
+  items <- drive_ls(as_id(gdrive_folder_id))
+  folder_match <- items[items$name == folder_name, ]
+
+  if (nrow(folder_match) == 0) {
+    stop(paste0("Folder not found: ", folder_name))
+  }
+
+  files <- drive_ls(as_id(folder_match$id[1]))
+  file_match <- files[files$name == file_name, ]
+
+  if (nrow(file_match) == 0) {
+    stop(paste0("File not found: ", file_name))
+  }
+
+  drive_download(
+    file = as_id(file_match$id[1]),
+    path = file.path(local_path, file_name),
+    overwrite = TRUE
+  )
+}
+
 download_root_file <- function(file_name, local_path = data_path) {
   items <- drive_ls(as_id(gdrive_folder_id))
   file_match <- items[items$name == file_name, ]
@@ -99,7 +124,7 @@ download_root_file <- function(file_name, local_path = data_path) {
 }
 
 # Download specific files
-download_specific_file("Master_Chemistry/20260105_masterdata_chem.csv")
+download_file_from_subfolder("Master_Chemistry", "20260105_masterdata_chem.csv")
 download_root_file("20260106_masterdata_discharge.csv")
 
 # To download ALL files recursively, uncomment:
