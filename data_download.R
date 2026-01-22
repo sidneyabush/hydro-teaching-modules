@@ -1,53 +1,88 @@
 # Google Drive Data Download Script
-# This script downloads data files from Google Drive to the local data/ folder
-# Uses OAuth authentication for secure access
+# Downloads data files from Google Drive to the local data/ folder
+# Uses OAuth authentication
 
-# Load required packages
 if (!require("googledrive")) install.packages("googledrive")
 library(googledrive)
 
-# Authenticate with Google Drive
-# This will open a browser window for OAuth authentication
-# The token will be cached locally for future use
 drive_auth()
 
-# Google Drive folder URL
-# https://drive.google.com/drive/u/1/folders/1hbkUsTdo4WAEUnlPReOUuXdeeXm92mg-
 gdrive_folder_id <- "1hbkUsTdo4WAEUnlPReOUuXdeeXm92mg-"
 
-# Create data directory if it doesn't exist
 if (!dir.exists("data")) {
   dir.create("data")
 }
 
-# List all files in the Google Drive folder
-cat("Fetching files from Google Drive...\n")
-files <- drive_ls(as_id(gdrive_folder_id))
+download_files_recursive <- function(folder_id, local_path = "data", depth = 0) {
+  items <- drive_ls(as_id(folder_id))
 
-if (nrow(files) == 0) {
-  cat("No files found in the Google Drive folder.\n")
-} else {
-  cat(paste0("Found ", nrow(files), " file(s) in Google Drive folder.\n\n"))
-
-  # Download each file
-  for (i in 1:nrow(files)) {
-    file_name <- files$name[i]
-    file_id <- files$id[i]
-
-    cat(paste0("Downloading: ", file_name, "\n"))
-
-    # Download to data/ folder
-    drive_download(
-      file = as_id(file_id),
-      path = file.path("data", file_name),
-      overwrite = TRUE
-    )
+  if (nrow(items) == 0) {
+    return()
   }
 
-  cat("\nAll files downloaded successfully!\n")
-  cat(paste0("Files saved to: ", normalizePath("data"), "\n"))
+  for (i in 1:nrow(items)) {
+    item_name <- items$name[i]
+    item_id <- items$id[i]
+    item_type <- items$drive_resource[[i]]$mimeType
+
+    if (item_type == "application/vnd.google-apps.folder") {
+      subfolder_path <- file.path(local_path, item_name)
+      if (!dir.exists(subfolder_path)) {
+        dir.create(subfolder_path, recursive = TRUE)
+      }
+      download_files_recursive(item_id, subfolder_path, depth + 1)
+    } else {
+      tryCatch({
+        drive_download(
+          file = as_id(item_id),
+          path = file.path(local_path, item_name),
+          overwrite = TRUE
+        )
+      }, error = function(e) {})
+    }
+  }
 }
 
-# List downloaded files
-cat("\nDownloaded files:\n")
-print(list.files("data"))
+download_specific_file <- function(file_path, local_path = "data") {
+  path_parts <- strsplit(file_path, "/")[[1]]
+  current_folder_id <- gdrive_folder_id
+
+  for (i in 1:(length(path_parts) - 1)) {
+    folder_name <- path_parts[i]
+    items <- drive_ls(as_id(current_folder_id))
+    folder_match <- items[items$name == folder_name, ]
+
+    if (nrow(folder_match) == 0) {
+      stop(paste0("Folder not found: ", folder_name))
+    }
+
+    current_folder_id <- folder_match$id[1]
+
+    local_subfolder <- file.path(local_path, paste(path_parts[1:i], collapse = "/"))
+    if (!dir.exists(local_subfolder)) {
+      dir.create(local_subfolder, recursive = TRUE)
+    }
+  }
+
+  file_name <- path_parts[length(path_parts)]
+  files <- drive_ls(as_id(current_folder_id))
+  file_match <- files[files$name == file_name, ]
+
+  if (nrow(file_match) == 0) {
+    stop(paste0("File not found: ", file_name))
+  }
+
+  local_file_path <- file.path(local_path, file_path)
+
+  drive_download(
+    file = as_id(file_match$id[1]),
+    path = local_file_path,
+    overwrite = TRUE
+  )
+}
+
+# Download specific files
+download_specific_file("Master_Chemistry/20260105_masterdata_chem.csv")
+
+# To download ALL files recursively, uncomment:
+# download_files_recursive(gdrive_folder_id)
