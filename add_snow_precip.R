@@ -2,7 +2,7 @@ if (!require("librarian")) {
   options(repos = c(CRAN = "https://cloud.r-project.org"))
   install.packages("librarian")
 }
-librarian::shelf(dplyr, tidyr)
+librarian::shelf(dplyr, tidyr, stringr)
 
 data_path <- "/Users/sidneybush/Library/CloudStorage/Box-Box/Sidney_Bush/CUAHSI-teaching-modules-shiny/data"
 
