@@ -59,6 +59,15 @@ teaching-modules-shiny/
 
 The `1_Data_Harmonization.R` script processes the raw chemistry and discharge data to create a harmonized dataset for North American sites (US + Canada).
 
+<<<<<<< Updated upstream
+=======
+**Run the harmonization:**
+
+```r
+source("1_Data_Harmonization.R")
+```
+
+>>>>>>> Stashed changes
 **Output files** (in Box data folder):
 - `harmonized_north_america_partial.csv` - All 1,134 North American sites with partial data (many NAs)
 - `harmonized_north_america_complete.csv` - 141 sites with complete data (RBI, RCS, climate, slope)
@@ -72,7 +81,10 @@ The `1_Data_Harmonization.R` script processes the raw chemistry and discharge da
 - Basin slope and elevation data - 148 sites
 - Precipitation, temperature, evapotranspiration (time series)
 - Land use/land cover percentages
+<<<<<<< Updated upstream
 - Snow fraction metrics
+=======
+>>>>>>> Stashed changes
 - 141 sites with complete data across all metrics
 
 ## Data Location
@@ -84,6 +96,11 @@ Data files are stored in Box (not in this repository):
 
 Original data is in Google Drive:
 https://drive.google.com/drive/folders/1hbkUsTdo4WAEUnlPReOUuXdeeXm92mg-
+
+## Download Scripts
+
+- `data_download.R` - Downloads master chemistry and discharge files
+- `download_driver_data.R` - Downloads climate, spatial, and land use data
 
 ## Notes
 
