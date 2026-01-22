@@ -9,11 +9,13 @@ drive_auth()
 
 gdrive_folder_id <- "1hbkUsTdo4WAEUnlPReOUuXdeeXm92mg-"
 
-if (!dir.exists("data")) {
-  dir.create("data")
+data_path <- "/Users/sidneybush/Library/CloudStorage/Box-Box/Sidney_Bush/CUAHSI-teaching-modules-shiny/data"
+
+if (!dir.exists(data_path)) {
+  dir.create(data_path, recursive = TRUE)
 }
 
-download_files_recursive <- function(folder_id, local_path = "data", depth = 0) {
+download_files_recursive <- function(folder_id, local_path = data_path, depth = 0) {
   items <- drive_ls(as_id(folder_id))
 
   if (nrow(items) == 0) {
@@ -43,7 +45,7 @@ download_files_recursive <- function(folder_id, local_path = "data", depth = 0) 
   }
 }
 
-download_specific_file <- function(file_path, local_path = "data") {
+download_specific_file <- function(file_path, local_path = data_path) {
   path_parts <- strsplit(file_path, "/")[[1]]
   current_folder_id <- gdrive_folder_id
 
@@ -81,7 +83,7 @@ download_specific_file <- function(file_path, local_path = "data") {
   )
 }
 
-download_root_file <- function(file_name, local_path = "data") {
+download_root_file <- function(file_name, local_path = data_path) {
   items <- drive_ls(as_id(gdrive_folder_id))
   file_match <- items[items$name == file_name, ]
 
