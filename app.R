@@ -169,7 +169,14 @@ ui <- page_navbar(
                             choices = c("Low (0-40 days)" = "Low (0-40 days)",
                                       "Medium (40-80 days)" = "Medium (40-80 days)",
                                       "High (80+ days)" = "High (80+ days)"),
-                            selected = c("Low (0-40 days)", "Medium (40-80 days)", "High (80+ days)"))
+                            selected = c("Low (0-40 days)", "Medium (40-80 days)", "High (80+ days)")),
+          hr(),
+          h4("Highlight Specific Sites"),
+          p("Select sites to highlight on the plot:",
+            style = "font-size: 0.85em; color: #666;"),
+          selectInput("highlight_sites", "Select sites:",
+                     choices = NULL,
+                     multiple = TRUE)
         ),
 
         # Controls for Hydrograph tab
@@ -187,18 +194,26 @@ ui <- page_navbar(
           selectInput("high_snow_sites", "High snow sites (80+ days):",
                      choices = NULL,
                      multiple = TRUE),
-          p("Select up to 5 sites total across all categories",
-            style = "font-size: 0.85em; color: #d67e7e; margin-top: 8px;")
+          p("Select at least 2 sites total to compare",
+            style = "font-size: 0.85em; color: #666; margin-top: 8px;")
         )
       ),
 
       navset_card_tab(
         id = "activity1_tab",
         nav_panel("RCS vs RBI by Snow",
-          card(
-            full_screen = TRUE,
-            card_header("How does snow influence flashiness and recession patterns?"),
-            plotlyOutput("rcs_rbi_plot", height = 600)
+          layout_columns(
+            col_widths = c(12, 12),
+            card(
+              full_screen = TRUE,
+              card_header("How does snow influence flashiness and recession patterns?"),
+              plotlyOutput("rcs_rbi_plot", height = 600)
+            ),
+            card(
+              full_screen = TRUE,
+              card_header("Selected Sites Detail"),
+              plotlyOutput("rcs_rbi_highlight_plot", height = 500)
+            )
           )
         ),
         nav_panel("Hydrographs",
@@ -238,8 +253,12 @@ server <- function(input, output, session) {
     read.csv(file.path(data_path, "20260106_masterdata_discharge.csv"),
              stringsAsFactors = FALSE) %>%
       filter(LTER %in% na_lter) %>%
-      mutate(Date = as.Date(Date),
-             Stream_ID = paste(LTER, Stream_Name, sep = "_"))
+      mutate(
+        Date = as.Date(Date),
+        Stream_ID = paste(LTER, Stream_Name, sep = "_"),
+        Stream_ID = stringr::str_trim(Stream_ID),
+        Stream_ID = stringr::str_replace_all(Stream_ID, "\\s+", "_")
+      )
   })
 
   # Overview table
@@ -313,9 +332,19 @@ server <- function(input, output, session) {
       paste0(high_sites$Stream_Name, " [", high_sites$LTER, ", ", round(high_sites$mean_snow_days, 0), " days]")
     )
 
+    # All sites for highlighting
+    all_sites <- site_data %>%
+      arrange(snow_cat, Stream_Name)
+
+    all_choices <- setNames(
+      all_sites$Stream_ID,
+      paste0(all_sites$Stream_Name, " [", all_sites$LTER, ", ", round(all_sites$mean_snow_days, 0), " days]")
+    )
+
     updateSelectInput(session, "low_snow_sites", choices = low_choices)
     updateSelectInput(session, "medium_snow_sites", choices = medium_choices)
     updateSelectInput(session, "high_snow_sites", choices = high_choices)
+    updateSelectInput(session, "highlight_sites", choices = all_choices)
   })
 
   # Site map
@@ -387,16 +416,10 @@ server <- function(input, output, session) {
     # Combine all selected sites
     all_selected <- c(input$low_snow_sites, input$medium_snow_sites, input$high_snow_sites)
 
-    if (is.null(all_selected) || length(all_selected) == 0) {
+    if (is.null(all_selected) || length(all_selected) < 2) {
       return(plotly_empty() %>%
-        layout(title = list(text = "Select sites from the dropdowns to compare discharge patterns",
+        layout(title = list(text = "Select at least 2 sites total to compare discharge patterns",
                            font = list(color = "#666", size = 14))))
-    }
-
-    if (length(all_selected) > 5) {
-      return(plotly_empty() %>%
-        layout(title = list(text = "Please select 5 or fewer sites total across all categories",
-                           font = list(color = "#d67e7e", size = 14))))
     }
 
     # Get site info
@@ -454,7 +477,8 @@ server <- function(input, output, session) {
     req(input$show_snow_categories)
 
     plot_data <- harmonized_with_categories() %>%
-      filter(snow_cat %in% input$show_snow_categories)
+      filter(snow_cat %in% input$show_snow_categories) %>%
+      mutate(is_highlighted = Stream_ID %in% input$highlight_sites)
 
     if (nrow(plot_data) == 0) {
       return(plotly_empty() %>%
@@ -462,16 +486,18 @@ server <- function(input, output, session) {
                            font = list(color = "#666", size = 14))))
     }
 
-    # Create plot showing snow categories
+    # Create plot showing snow categories with highlighted sites
     p <- ggplot(plot_data, aes(x = RBI, y = recession_slope,
                                color = snow_cat,
+                               alpha = is_highlighted,
+                               size = is_highlighted,
                                text = paste0("<b>", Stream_Name, "</b><br>",
                                            "LTER: ", LTER, "<br>",
                                            "Snow Category: ", snow_cat, "<br>",
                                            "Snow Days/Year: ", round(mean_snow_days, 0), "<br>",
                                            "RBI: ", round(RBI, 3), "<br>",
                                            "RCS: ", round(recession_slope, 3)))) +
-      geom_point(size = 3, alpha = 0.7) +
+      geom_point() +
       labs(x = "Richards-Baker Flashiness Index (RBI)\n(higher = more flashy)",
            y = "Recession Curve Slope (RCS)\n(higher = faster drainage)",
            color = "Snow Category",
@@ -488,7 +514,9 @@ server <- function(input, output, session) {
       ) +
       scale_color_manual(values = c("Low (0-40 days)" = "#d67e7e",
                                     "Medium (40-80 days)" = "#e6c79c",
-                                    "High (80+ days)" = "#6b9bd1"))
+                                    "High (80+ days)" = "#6b9bd1")) +
+      scale_alpha_manual(values = c("FALSE" = 0.4, "TRUE" = 1), guide = "none") +
+      scale_size_manual(values = c("FALSE" = 2, "TRUE" = 4), guide = "none")
 
     ggplotly(p, tooltip = "text") %>%
       layout(
@@ -496,6 +524,57 @@ server <- function(input, output, session) {
         plot_bgcolor = "#ffffff",
         title = list(text = "Do low snow sites have different flashiness than high snow sites?",
                     font = list(size = 12, color = "#666"))
+      )
+  })
+
+  # RCS vs RBI highlight plot (specific sites detail)
+  output$rcs_rbi_highlight_plot <- renderPlotly({
+    if (is.null(input$highlight_sites) || length(input$highlight_sites) == 0) {
+      return(plotly_empty() %>%
+        layout(title = list(text = "Select sites from the dropdown to see detailed comparison",
+                           font = list(color = "#666", size = 14))))
+    }
+
+    plot_data <- harmonized_with_categories() %>%
+      filter(Stream_ID %in% input$highlight_sites)
+
+    if (nrow(plot_data) == 0) {
+      return(plotly_empty() %>%
+        layout(title = list(text = "No data for selected sites",
+                           font = list(color = "#666", size = 14))))
+    }
+
+    # Create plot showing only selected sites
+    p <- ggplot(plot_data, aes(x = RBI, y = recession_slope,
+                               color = snow_cat,
+                               text = paste0("<b>", Stream_Name, "</b><br>",
+                                           "LTER: ", LTER, "<br>",
+                                           "Snow Category: ", snow_cat, "<br>",
+                                           "Snow Days/Year: ", round(mean_snow_days, 0), "<br>",
+                                           "RBI: ", round(RBI, 3), "<br>",
+                                           "RCS: ", round(recession_slope, 3)))) +
+      geom_point(size = 5, alpha = 0.8) +
+      geom_text(aes(label = Stream_Name), hjust = -0.1, vjust = 0, size = 3, show.legend = FALSE) +
+      labs(x = "Richards-Baker Flashiness Index (RBI)\n(higher = more flashy)",
+           y = "Recession Curve Slope (RCS)\n(higher = faster drainage)",
+           color = "Snow Category") +
+      theme_minimal(base_family = "Work Sans") +
+      theme(
+        plot.background = element_rect(fill = "#fefcfb", color = NA),
+        panel.background = element_rect(fill = "#ffffff", color = NA),
+        panel.grid.major = element_line(color = "#d4e3f0", linewidth = 0.3),
+        panel.grid.minor = element_line(color = "#d4e3f0", linewidth = 0.15),
+        text = element_text(color = "#2d2926"),
+        axis.text = element_text(color = "#2d2926")
+      ) +
+      scale_color_manual(values = c("Low (0-40 days)" = "#d67e7e",
+                                    "Medium (40-80 days)" = "#e6c79c",
+                                    "High (80+ days)" = "#6b9bd1"))
+
+    ggplotly(p, tooltip = "text") %>%
+      layout(
+        paper_bgcolor = "#fefcfb",
+        plot_bgcolor = "#ffffff"
       )
   })
 }
