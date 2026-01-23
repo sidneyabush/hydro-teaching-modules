@@ -150,67 +150,44 @@ ui <- page_navbar(
 
   # Activity 1 Tab
   nav_panel(
-    "Activity 1: Hydrographs & Flashiness",
+    "Activity 1: Snow Influence on Flashiness",
     layout_sidebar(
       sidebar = sidebar(
         width = 300,
-        h4("Filter Sites"),
-        selectInput("filter_by", "Filter sites by:",
-                   choices = c("Snow Fraction" = "snow",
-                             "Climate Zone" = "climate",
-                             "Land Use" = "landuse"),
-                   selected = "snow"),
-        conditionalPanel(
-          condition = "input.filter_by == 'snow'",
-          checkboxGroupInput("snow_category", "Snow categories:",
-                            choices = c("Low (0-60 days/year)" = "low",
-                                      "Medium (60-180 days/year)" = "medium",
-                                      "High (180+ days/year)" = "high"),
-                            selected = c("low", "medium", "high"))
-        ),
-        conditionalPanel(
-          condition = "input.filter_by == 'climate'",
-          checkboxGroupInput("climate_filter", "Climate zones:",
-                            choices = NULL,
-                            selected = NULL)
-        ),
-        conditionalPanel(
-          condition = "input.filter_by == 'landuse'",
-          checkboxGroupInput("landuse_filter", "Land use types:",
-                            choices = NULL,
-                            selected = NULL)
-        ),
+        h4("Compare Snow Influence"),
+        p("Explore how snow affects river flashiness (RBI) and recession behavior (RCS)",
+          style = "font-size: 0.9em; color: #666;"),
         hr(),
-        h4("Site Selection"),
-        selectInput("activity1_sites", "Select Sites (up to 5):",
+        h4("RCS vs RBI Scatter Plot"),
+        p("This plot shows all sites colored by snow category. Low snow sites (red) vs high snow sites (blue).",
+          style = "font-size: 0.85em; color: #666;"),
+        checkboxGroupInput("show_snow_categories", "Show snow categories:",
+                          choices = c("Low (0-60 days)" = "Low (0-60 days)",
+                                    "Medium (60-180 days)" = "Medium (60-180 days)",
+                                    "High (180+ days)" = "High (180+ days)"),
+                          selected = c("Low (0-60 days)", "Medium (60-180 days)", "High (180+ days)")),
+        hr(),
+        h4("Hydrograph Site Selection"),
+        p("Select up to 5 sites to compare their discharge patterns. Try selecting sites from different snow categories.",
+          style = "font-size: 0.85em; color: #666;"),
+        selectInput("hydro_sites", "Select sites:",
                    choices = NULL,
-                   multiple = TRUE),
-        p("Choose sites from different categories to compare",
-          style = "font-size: 0.85em; color: #666; margin-top: -8px;"),
-        hr(),
-        h4("RCS vs RBI Plot Options"),
-        selectInput("rcs_rbi_color", "Color by:",
-                   choices = c("Snow Category" = "snow_cat",
-                             "Snow Fraction" = "snow_fraction",
-                             "Climate Zone" = "ClimateZ",
-                             "Land Use" = "major_land",
-                             "Mean Annual Precip" = "mean_annual_precip"),
-                   selected = "snow_cat")
+                   multiple = TRUE)
       ),
 
       navset_card_tab(
+        nav_panel("RCS vs RBI by Snow",
+          card(
+            full_screen = TRUE,
+            card_header("How does snow influence flashiness and recession patterns?"),
+            plotlyOutput("rcs_rbi_plot", height = 600)
+          )
+        ),
         nav_panel("Hydrographs",
           card(
             full_screen = TRUE,
-            card_header("Discharge Time Series - Compare Sites with Different Snow Influence"),
+            card_header("Compare Discharge Patterns"),
             plotlyOutput("hydrograph_plot", height = 600)
-          )
-        ),
-        nav_panel("RCS vs RBI",
-          card(
-            full_screen = TRUE,
-            card_header("Recession Curve Slope vs Flashiness Index"),
-            plotlyOutput("rcs_rbi_plot", height = 600)
           )
         )
       )
@@ -269,39 +246,12 @@ server <- function(input, output, session) {
                             selected = lter_choices)
   })
 
-  # Update climate filter choices
-  observe({
-    climate_zones <- harmonized_complete() %>%
-      filter(!is.na(ClimateZ)) %>%
-      pull(ClimateZ) %>%
-      unique() %>%
-      sort()
-
-    updateCheckboxGroupInput(session, "climate_filter",
-                            choices = climate_zones,
-                            selected = climate_zones)
-  })
-
-  # Update land use filter choices
-  observe({
-    landuse_types <- harmonized_complete() %>%
-      filter(!is.na(major_land)) %>%
-      pull(major_land) %>%
-      unique() %>%
-      sort()
-
-    updateCheckboxGroupInput(session, "landuse_filter",
-                            choices = landuse_types,
-                            selected = landuse_types)
-  })
-
   # Add snow category to harmonized data
   harmonized_with_categories <- reactive({
     harmonized_complete() %>%
-      filter(!is.na(RBI), !is.na(recession_slope)) %>%
+      filter(!is.na(RBI), !is.na(recession_slope), !is.na(mean_snow_days)) %>%
       mutate(
         snow_cat = case_when(
-          is.na(mean_snow_days) ~ "Unknown",
           mean_snow_days < 60 ~ "Low (0-60 days)",
           mean_snow_days >= 60 & mean_snow_days < 180 ~ "Medium (60-180 days)",
           mean_snow_days >= 180 ~ "High (180+ days)",
@@ -311,64 +261,17 @@ server <- function(input, output, session) {
       )
   })
 
-  # Filtered sites based on selected filter type
-  filtered_sites <- reactive({
-    req(input$filter_by)
-
-    data <- harmonized_with_categories()
-
-    if (input$filter_by == "snow") {
-      req(input$snow_category)
-
-      data <- data %>%
-        filter(
-          (snow_cat == "Low (0-60 days)" & "low" %in% input$snow_category) |
-          (snow_cat == "Medium (60-180 days)" & "medium" %in% input$snow_category) |
-          (snow_cat == "High (180+ days)" & "high" %in% input$snow_category)
-        )
-
-    } else if (input$filter_by == "climate") {
-      req(input$climate_filter)
-      data <- data %>% filter(ClimateZ %in% input$climate_filter)
-
-    } else if (input$filter_by == "landuse") {
-      req(input$landuse_filter)
-      data <- data %>% filter(major_land %in% input$landuse_filter)
-    }
-
-    data
-  })
-
-  # Update site choices based on filters
+  # Update site choices for hydrograph
   observe({
-    req(filtered_sites())
+    site_data <- harmonized_with_categories() %>%
+      arrange(snow_cat, Stream_Name)
 
-    if (input$filter_by == "snow") {
-      site_choices <- filtered_sites() %>%
-        arrange(snow_cat, Stream_Name) %>%
-        mutate(
-          label = paste0(Stream_Name, " [", gsub(" \\(.*", "", snow_cat), ", ", LTER, "]")
-        ) %>%
-        pull(label, name = Stream_ID)
+    site_choices <- setNames(
+      site_data$Stream_ID,
+      paste0(site_data$Stream_Name, " [", gsub(" \\(.*", "", site_data$snow_cat), " snow, ", site_data$LTER, "]")
+    )
 
-    } else if (input$filter_by == "climate") {
-      site_choices <- filtered_sites() %>%
-        arrange(ClimateZ, Stream_Name) %>%
-        mutate(
-          label = paste0(Stream_Name, " [", ClimateZ, ", ", LTER, "]")
-        ) %>%
-        pull(label, name = Stream_ID)
-
-    } else {
-      site_choices <- filtered_sites() %>%
-        arrange(major_land, Stream_Name) %>%
-        mutate(
-          label = paste0(Stream_Name, " [", major_land, ", ", LTER, "]")
-        ) %>%
-        pull(label, name = Stream_ID)
-    }
-
-    updateSelectInput(session, "activity1_sites",
+    updateSelectInput(session, "hydro_sites",
                      choices = site_choices)
   })
 
@@ -438,41 +341,47 @@ server <- function(input, output, session) {
 
   # Hydrograph plot
   output$hydrograph_plot <- renderPlotly({
-    req(input$activity1_sites)
-
-    if (length(input$activity1_sites) == 0) {
+    if (is.null(input$hydro_sites) || length(input$hydro_sites) == 0) {
       return(plotly_empty() %>%
-        layout(title = list(text = "Select up to 5 sites to view hydrographs",
-                           font = list(color = "#666"))))
+        layout(title = list(text = "Select up to 5 sites to compare their discharge patterns",
+                           font = list(color = "#666", size = 14))))
     }
 
-    if (length(input$activity1_sites) > 5) {
+    if (length(input$hydro_sites) > 5) {
       return(plotly_empty() %>%
         layout(title = list(text = "Please select 5 or fewer sites",
-                           font = list(color = "#d67e7e"))))
+                           font = list(color = "#d67e7e", size = 14))))
     }
 
-    # Get site info for selected Stream_IDs
+    # Get site info
     selected_sites <- harmonized_with_categories() %>%
-      filter(Stream_ID %in% input$activity1_sites) %>%
-      select(Stream_ID, Stream_Name, LTER, snow_cat)
+      filter(Stream_ID %in% input$hydro_sites) %>%
+      select(Stream_ID, Stream_Name, LTER, snow_cat, mean_snow_days)
 
-    # Filter discharge data by Stream_ID
+    # Get discharge data
     plot_data <- discharge_data() %>%
-      filter(Stream_ID %in% input$activity1_sites) %>%
+      filter(Stream_ID %in% input$hydro_sites) %>%
       left_join(selected_sites, by = "Stream_ID") %>%
-      mutate(site_label = paste0(Stream_Name, " (", gsub(" \\(.*", "", snow_cat), ")"))
+      mutate(site_label = paste0(Stream_Name, " (", gsub(" \\(.*", "", snow_cat), " snow)"))
 
     if (nrow(plot_data) == 0) {
       return(plotly_empty() %>%
         layout(title = list(text = "No discharge data available for selected sites",
-                           font = list(color = "#666"))))
+                           font = list(color = "#666", size = 14))))
     }
 
-    # Earth-toned color palette for lines
-    line_colors <- c("#6b9bd1", "#7fb069", "#d67e7e", "#e6c79c", "#5a7fa8")
+    # Colors matching snow categories
+    snow_colors <- c(
+      "Low (0-60 days)" = "#d67e7e",
+      "Medium (60-180 days)" = "#e6c79c",
+      "High (180+ days)" = "#6b9bd1"
+    )
 
-    p <- ggplot(plot_data, aes(x = Date, y = Qcms, color = site_label)) +
+    # Assign colors based on snow category
+    plot_data <- plot_data %>%
+      mutate(line_color = snow_colors[as.character(snow_cat)])
+
+    p <- ggplot(plot_data, aes(x = Date, y = Qcms, color = site_label, group = site_label)) +
       geom_line(linewidth = 0.7, alpha = 0.8) +
       labs(x = "Date", y = "Discharge (cms)", color = "Site") +
       theme_minimal(base_family = "Work Sans") +
@@ -484,8 +393,7 @@ server <- function(input, output, session) {
         text = element_text(color = "#2d2926"),
         axis.text = element_text(color = "#2d2926"),
         legend.position = "bottom"
-      ) +
-      scale_color_manual(values = line_colors[1:length(unique(plot_data$site_label))])
+      )
 
     ggplotly(p) %>%
       layout(
@@ -497,93 +405,51 @@ server <- function(input, output, session) {
 
   # RCS vs RBI plot
   output$rcs_rbi_plot <- renderPlotly({
-    req(input$rcs_rbi_color)
+    req(input$show_snow_categories)
 
-    plot_data <- filtered_sites()
+    plot_data <- harmonized_with_categories() %>%
+      filter(snow_cat %in% input$show_snow_categories)
 
     if (nrow(plot_data) == 0) {
       return(plotly_empty() %>%
-        layout(title = list(text = "No sites match the selected filters",
-                           font = list(color = "#666"))))
+        layout(title = list(text = "Select at least one snow category to display",
+                           font = list(color = "#666", size = 14))))
     }
 
-    # Use different color scales for numeric vs categorical
-    if (input$rcs_rbi_color %in% c("snow_fraction", "mean_annual_precip")) {
-      p <- ggplot(plot_data, aes(x = RBI, y = recession_slope,
-                                 color = .data[[input$rcs_rbi_color]],
-                                 text = paste0("Site: ", Stream_Name, "<br>",
-                                             "LTER: ", LTER, "<br>",
-                                             "Snow: ", snow_cat, "<br>",
-                                             "RBI: ", round(RBI, 3), "<br>",
-                                             "RCS: ", round(recession_slope, 3)))) +
-        geom_point(size = 3, alpha = 0.7) +
-        labs(x = "Richards-Baker Flashiness Index (RBI)",
-             y = "Recession Curve Slope (RCS)",
-             color = gsub("_", " ", input$rcs_rbi_color)) +
-        theme_minimal(base_family = "Work Sans") +
-        theme(
-          plot.background = element_rect(fill = "#fefcfb", color = NA),
-          panel.background = element_rect(fill = "#ffffff", color = NA),
-          panel.grid.major = element_line(color = "#d4e3f0", linewidth = 0.3),
-          panel.grid.minor = element_line(color = "#d4e3f0", linewidth = 0.15),
-          text = element_text(color = "#2d2926"),
-          axis.text = element_text(color = "#2d2926")
-        ) +
-        scale_color_gradientn(colors = c("#d67e7e", "#e6c79c", "#7fb069", "#6b9bd1", "#5a7fa8"))
-    } else if (input$rcs_rbi_color == "snow_cat") {
-      # Special colors for snow categories
-      p <- ggplot(plot_data, aes(x = RBI, y = recession_slope,
-                                 color = snow_cat,
-                                 text = paste0("Site: ", Stream_Name, "<br>",
-                                             "LTER: ", LTER, "<br>",
-                                             "Snow: ", snow_cat, "<br>",
-                                             "RBI: ", round(RBI, 3), "<br>",
-                                             "RCS: ", round(recession_slope, 3)))) +
-        geom_point(size = 3, alpha = 0.7) +
-        labs(x = "Richards-Baker Flashiness Index (RBI)",
-             y = "Recession Curve Slope (RCS)",
-             color = "Snow Category") +
-        theme_minimal(base_family = "Work Sans") +
-        theme(
-          plot.background = element_rect(fill = "#fefcfb", color = NA),
-          panel.background = element_rect(fill = "#ffffff", color = NA),
-          panel.grid.major = element_line(color = "#d4e3f0", linewidth = 0.3),
-          panel.grid.minor = element_line(color = "#d4e3f0", linewidth = 0.15),
-          text = element_text(color = "#2d2926"),
-          axis.text = element_text(color = "#2d2926")
-        ) +
-        scale_color_manual(values = c("Low (0-60 days)" = "#d67e7e",
-                                     "Medium (60-180 days)" = "#e6c79c",
-                                     "High (180+ days)" = "#6b9bd1",
-                                     "Unknown" = "#999999"))
-    } else {
-      p <- ggplot(plot_data, aes(x = RBI, y = recession_slope,
-                                 color = .data[[input$rcs_rbi_color]],
-                                 text = paste0("Site: ", Stream_Name, "<br>",
-                                             "LTER: ", LTER, "<br>",
-                                             "Snow: ", snow_cat, "<br>",
-                                             "RBI: ", round(RBI, 3), "<br>",
-                                             "RCS: ", round(recession_slope, 3)))) +
-        geom_point(size = 3, alpha = 0.7) +
-        labs(x = "Richards-Baker Flashiness Index (RBI)",
-             y = "Recession Curve Slope (RCS)",
-             color = gsub("_", " ", input$rcs_rbi_color)) +
-        theme_minimal(base_family = "Work Sans") +
-        theme(
-          plot.background = element_rect(fill = "#fefcfb", color = NA),
-          panel.background = element_rect(fill = "#ffffff", color = NA),
-          panel.grid.major = element_line(color = "#d4e3f0", linewidth = 0.3),
-          panel.grid.minor = element_line(color = "#d4e3f0", linewidth = 0.15),
-          text = element_text(color = "#2d2926"),
-          axis.text = element_text(color = "#2d2926")
-        ) +
-        scale_color_viridis_d(option = "viridis", begin = 0.2, end = 0.9)
-    }
+    # Create plot showing snow categories
+    p <- ggplot(plot_data, aes(x = RBI, y = recession_slope,
+                               color = snow_cat,
+                               text = paste0("<b>", Stream_Name, "</b><br>",
+                                           "LTER: ", LTER, "<br>",
+                                           "Snow Category: ", snow_cat, "<br>",
+                                           "Snow Days/Year: ", round(mean_snow_days, 0), "<br>",
+                                           "RBI: ", round(RBI, 3), "<br>",
+                                           "RCS: ", round(recession_slope, 3)))) +
+      geom_point(size = 3, alpha = 0.7) +
+      labs(x = "Richards-Baker Flashiness Index (RBI)\n(higher = more flashy)",
+           y = "Recession Curve Slope (RCS)\n(higher = faster drainage)",
+           color = "Snow Category",
+           title = "Do low snow sites have different flashiness than high snow sites?") +
+      theme_minimal(base_family = "Work Sans") +
+      theme(
+        plot.background = element_rect(fill = "#fefcfb", color = NA),
+        panel.background = element_rect(fill = "#ffffff", color = NA),
+        panel.grid.major = element_line(color = "#d4e3f0", linewidth = 0.3),
+        panel.grid.minor = element_line(color = "#d4e3f0", linewidth = 0.15),
+        text = element_text(color = "#2d2926"),
+        axis.text = element_text(color = "#2d2926"),
+        plot.title = element_text(size = 11, color = "#666", face = "italic")
+      ) +
+      scale_color_manual(values = c("Low (0-60 days)" = "#d67e7e",
+                                    "Medium (60-180 days)" = "#e6c79c",
+                                    "High (180+ days)" = "#6b9bd1"))
 
     ggplotly(p, tooltip = "text") %>%
       layout(
         paper_bgcolor = "#fefcfb",
-        plot_bgcolor = "#ffffff"
+        plot_bgcolor = "#ffffff",
+        title = list(text = "Do low snow sites have different flashiness than high snow sites?",
+                    font = list(size = 12, color = "#666"))
       )
   })
 }
