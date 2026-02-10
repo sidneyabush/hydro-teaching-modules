@@ -10,7 +10,7 @@ suppressPackageStartupMessages({
     options(repos = c(CRAN = "https://cloud.r-project.org"))
     install.packages("librarian")
   }
-  librarian::shelf(shiny, bslib, dplyr, ggplot2, leaflet, leaflet.extras, plotly, viridis)
+  librarian::shelf(shiny, bslib, dplyr, ggplot2, leaflet, plotly, viridis)
 })
 
 data_path <- "/Users/sidneybush/Library/CloudStorage/Box-Box/Hydrology_Lab/CUAHSI-teaching-modules-shiny/data"
@@ -24,10 +24,9 @@ module_colors <- c(
   "warning" = "#e6c79c"
 )
 
-snow_colors <- c(
-  "Low (0-40 days)" = "#d67e7e",
-  "Medium (40-80 days)" = "#e6c79c",
-  "High (80+ days)" = "#6b9bd1"
+regime_colors <- c(
+  "Rain-dominated" = "#d67e7e",
+  "Snow-dominated" = "#6b9bd1"
 )
 
 # these get reused in multiple ggplots, so pulling them out here
@@ -56,7 +55,7 @@ discharge_global <- data.table::fread(
 ui <- page_navbar(
   title = "River Hydrology Teaching Module",
   theme = bs_theme(
-    base_font = font_google("Work Sans"),
+    base_font = font_google("Work Sans", wght = "400..700"),
     bg = "#fefcfb",
     fg = "#2d2926",
     navbar_bg = "#ffffff",
@@ -139,33 +138,34 @@ ui <- page_navbar(
     layout_sidebar(
       sidebar = sidebar(
         width = 300,
-        h4("Dataset Overview"),
-        tableOutput("overview_table"),
-        hr(),
         h4("Map Controls"),
         selectInput(
           "map_color_by",
           "Color sites by:",
           choices = c(
-            "Climate Zone" = "ClimateZ",
+            "Climate Zone" = "Name",
             "Snow Fraction" = "snow_fraction",
-            "RBI (Flashiness)" = "RBI",
-            "RCS (Recession Curve Slope)" = "recession_slope",
-            "Major Land Use" = "major_land",
+            "MAP (mm)" = "mean_annual_precip",
+            "RBI" = "RBI",
+            "RCS" = "recession_slope",
+            "LULC" = "major_land",
             "LTER Network" = "LTER"
           ),
-          selected = "ClimateZ"
+          selected = "Name"
+        ),
+        div(
+          style = "display: flex; justify-content: space-between; align-items: center;",
+          h4("Filter by LTER:", style = "margin: 0;"),
+          div(
+            actionLink("lter_all", "All", style = "font-size: 0.85em; margin-right: 8px;"),
+            actionLink("lter_none", "None", style = "font-size: 0.85em;")
+          )
         ),
         checkboxGroupInput(
           "map_lter",
-          "Filter by LTER:",
+          label = NULL,
           choices = NULL,
           selected = NULL
-        ),
-        checkboxInput(
-          "map_show_complete",
-          "Show only complete data sites",
-          value = TRUE
         )
       ),
 
@@ -176,26 +176,15 @@ ui <- page_navbar(
           leafletOutput("site_map", height = 600)
         ),
         card(
-          card_header("About This Module"),
-          p(
-            "This interactive module explores river hydrology metrics and their relationship
-            to watershed characteristics across North American rivers."
-          ),
-          br(),
-          h4("Key Metrics:"),
+          card_header("Key Metrics"),
           tags$ul(
-            tags$li(
-              strong("RBI (Richards-Baker Flashiness Index):"),
-              "Measures how rapidly streamflow changes over time"
-            ),
-            tags$li(
-              strong("Recession Curve Slope (RCS):"),
-              "Describes how quickly discharge decreases after peak flow"
-            ),
-            tags$li(
-              strong("Climate & Land Use:"),
-              "Koppen-Geiger classification, precipitation, snow fraction, land cover"
-            )
+            style = "font-size: 0.9em; line-height: 1.6; padding-left: 18px;",
+            tags$li(HTML("<span style='font-weight:700;'>Richards-Baker Flashiness Index</span> (RBI): Measures how rapidly streamflow changes over time")),
+            tags$li(HTML("<span style='font-weight:700;'>Recession Curve Slope</span> (RCS): Describes how quickly discharge decreases after peak flow")),
+            tags$li(HTML("<span style='font-weight:700;'>Climate Zone</span>: Koppen-Geiger climate classification")),
+            tags$li(HTML("<span style='font-weight:700;'>Mean Annual Precipitation</span> (MAP, mm): Average yearly precipitation across the watershed")),
+            tags$li(HTML("<span style='font-weight:700;'>Snow Fraction</span>: Proportion of the year with snow cover")),
+            tags$li(HTML("<span style='font-weight:700;'>Land-use / Land-cover</span> (LULC): Dominant land cover type within the watershed"))
           )
         )
       )
@@ -203,76 +192,64 @@ ui <- page_navbar(
   ),
 
   nav_panel(
-    "Activity 1: Snow Influence on Flashiness",
+    "Activity 1: Hydrographs & Subsurface",
     layout_sidebar(
       sidebar = sidebar(
         width = 300,
-        h4("Compare Snow Influence"),
-        p(
-          "Explore how snow affects river flashiness (RBI) and recession behavior (RCS)",
-          style = "font-size: 0.9em; color: #666;"
-        ),
-        hr(),
+        h4("Controls"),
 
-        # scatter plot controls — only visible when that tab is active
+        # --- scatter controls ---
         conditionalPanel(
-          condition = "input.activity1_tab == 'RCS vs RBI by Snow'",
-          h4("Filter Scatter Plot"),
+          condition = "input.activity1_tab == 'RCS vs RBI'",
           p(
-            "Show/hide snow categories on the plot:",
+            "Show or hide precipitation regime categories:",
             style = "font-size: 0.85em; color: #666;"
           ),
           checkboxGroupInput(
-            "show_snow_categories",
+            "show_regime_categories",
             "Display:",
             choices = c(
-              "Low (0-40 days)" = "Low (0-40 days)",
-              "Medium (40-80 days)" = "Medium (40-80 days)",
-              "High (80+ days)" = "High (80+ days)"
+              "Rain-dominated" = "Rain-dominated",
+              "Snow-dominated" = "Snow-dominated"
             ),
-            selected = c(
-              "Low (0-40 days)",
-              "Medium (40-80 days)",
-              "High (80+ days)"
-            )
+            selected = c("Rain-dominated", "Snow-dominated")
           ),
           hr(),
-          h4("Highlight Specific Sites"),
+          h4("Highlight Sites"),
           p(
-            "Select sites to highlight on the plot:",
+            "Pick sites to label on the plot:",
             style = "font-size: 0.85em; color: #666;"
           ),
           selectInput(
-            "highlight_sites",
-            "Select sites:",
+            "highlight_rain",
+            "Rain-dominated (fSnow < 25%):",
+            choices = NULL,
+            multiple = TRUE
+          ),
+          selectInput(
+            "highlight_snow_dom",
+            HTML("Snow-dominated (fSnow &ge; 25%):"),
             choices = NULL,
             multiple = TRUE
           )
         ),
 
-        # hydrograph controls
+        # --- hydrograph controls ---
         conditionalPanel(
           condition = "input.activity1_tab == 'Hydrographs'",
-          h4("Select Sites to Compare"),
           p(
-            "Choose sites from different snow categories to compare their discharge patterns.",
+            "Select at least 2 sites from different regimes, then click Plot.",
             style = "font-size: 0.85em; color: #666;"
           ),
           selectInput(
-            "low_snow_sites",
-            "Low snow sites (0-40 days):",
+            "rain_dom_sites",
+            "Rain-dominated (fSnow < 25%):",
             choices = NULL,
             multiple = TRUE
           ),
           selectInput(
-            "medium_snow_sites",
-            "Medium snow sites (40-80 days):",
-            choices = NULL,
-            multiple = TRUE
-          ),
-          selectInput(
-            "high_snow_sites",
-            "High snow sites (80+ days):",
+            "snow_dom_sites",
+            HTML("Snow-dominated (fSnow &ge; 25%):"),
             choices = NULL,
             multiple = TRUE
           ),
@@ -280,10 +257,6 @@ ui <- page_navbar(
             "plot_hydrographs",
             "Plot Hydrographs",
             class = "btn-primary mt-2 w-100"
-          ),
-          p(
-            "Select at least 2 sites total, then click the button above.",
-            style = "font-size: 0.85em; color: #666; margin-top: 8px;"
           )
         )
       ),
@@ -291,29 +264,105 @@ ui <- page_navbar(
       navset_card_tab(
         id = "activity1_tab",
         nav_panel(
-          "RCS vs RBI by Snow",
+          "RCS vs RBI",
           layout_columns(
-            col_widths = c(12, 12),
+            col_widths = c(8, 4),
             card(
               full_screen = TRUE,
               card_header(
-                "How does snow influence flashiness and recession patterns?"
+                "How does precipitation regime influence flashiness and recession?"
               ),
               plotlyOutput("rcs_rbi_plot", height = 600)
             ),
             card(
-              full_screen = TRUE,
-              card_header("Selected Sites Detail"),
-              plotlyOutput("rcs_rbi_highlight_plot", height = 500)
+              card_header("Guide"),
+              tags$div(
+                style = "font-size: 0.88em; line-height: 1.6; padding: 8px;",
+                tags$p(HTML(
+                  "<b>Richards-Baker Flashiness Index (RBI)</b>: Measures how
+                  rapidly streamflow changes over time. Higher values indicate
+                  a flashier basin that responds quickly to precipitation."
+                )),
+                tags$p(HTML(
+                  "<b>Recession Curve Slope (RCS)</b>: Describes how quickly
+                  discharge decreases after peak flow. Higher values indicate
+                  faster drainage and less subsurface storage."
+                )),
+                hr(),
+                tags$p(HTML(
+                  "<b>Rain-dominated</b> (fSnow < 25%): Precipitation falls
+                  mostly as rain; runoff responds directly to storm events."
+                )),
+                tags$p(HTML(
+                  "<b>Snow-dominated</b> (fSnow &ge; 25%): Significant
+                  snowpack buffers and delays runoff into spring melt."
+                )),
+                hr(),
+                tags$p(
+                  style = "color: #444;",
+                  HTML(
+                    "<b>What to look for:</b> You should see an inverse
+                    relationship between RCS and RBI. Why might flashier
+                    basins have lower recession curve slopes? What does this
+                    tell you about subsurface storage and streamflow
+                    generation?"
+                  )
+                ),
+                hr(),
+                tags$p(
+                  style = "font-size: 0.85em; color: #888;",
+                  HTML(
+                    "<em>fSnow = fraction of the year with snow cover
+                    (snow days &divide; 365).</em>"
+                  )
+                )
+              )
             )
           )
         ),
         nav_panel(
           "Hydrographs",
-          card(
-            full_screen = TRUE,
-            card_header("Compare Discharge Patterns"),
-            plotlyOutput("hydrograph_plot", height = 600)
+          layout_columns(
+            col_widths = c(8, 4),
+            card(
+              full_screen = TRUE,
+              card_header("Compare Discharge Patterns"),
+              plotlyOutput("hydrograph_plot", height = 600)
+            ),
+            card(
+              card_header("Reading Hydrographs"),
+              tags$div(
+                style = "font-size: 0.88em; line-height: 1.6; padding: 8px;",
+                tags$p(
+                  "Select two hydrographs from rain-dominated areas
+                  (fSnow < 25%) and two from snow-dominated areas
+                  (fSnow > 25%). Compare the flashiness and recession
+                  behavior of all four."
+                ),
+                hr(),
+                tags$p(HTML(
+                  "<b>Flashiness:</b> How rapidly does the hydrograph
+                  rise and fall? Rain-dominated basins tend to produce
+                  sharper peaks and faster recessions."
+                )),
+                tags$p(HTML(
+                  "<b>Recession:</b> How long does it take for discharge to
+                  return to baseflow after a peak? The length of the recession
+                  period reflects subsurface storage capacity."
+                )),
+                hr(),
+                tags$p(
+                  style = "color: #444;",
+                  HTML(
+                    "<b>What to look for:</b> Given the precipitation regime
+                    (snow vs rain), what can you say about the relationship
+                    between precipitation type and flashiness? Between
+                    precipitation type and recession behavior? What hypotheses
+                    can you form about why you see these patterns?"
+                  )
+                )
+              )
+            )
           )
         )
       )
@@ -321,22 +370,20 @@ ui <- page_navbar(
   ),
 
   nav_panel(
-    "Activity 2: Stream Salinity",
+    "Activity 2: Mapping Stream Salinity",
     layout_sidebar(
       sidebar = sidebar(
         width = 300,
-        h4("Stream Chloride Patterns"),
-        p(
-          "Explore spatial patterns of stream chloride across North American sites
-          and how they relate to land use and precipitation.",
-          style = "font-size: 0.9em; color: #666;"
-        ),
-        hr(),
+        h4("Controls"),
 
         # chloride map controls
         conditionalPanel(
           condition = "input.activity2_tab == 'Chloride Map'",
-          h4("Map Controls"),
+          p(
+            "Use log scale to see variation when a few high-concentration
+            sites dominate the color range.",
+            style = "font-size: 0.85em; color: #666;"
+          ),
           selectInput(
             "cl_map_color",
             "Color markers by:",
@@ -348,17 +395,20 @@ ui <- page_navbar(
             ),
             selected = "mean_Cl_uM"
           ),
-          p(
-            "Zoom in to see individual site markers. The heatmap shows
-            Cl concentration hotspots at continental scale.",
-            style = "font-size: 0.85em; color: #666;"
+          checkboxInput(
+            "cl_log_scale",
+            "Use log scale",
+            value = FALSE
           )
         ),
 
         # seasonal plot controls
         conditionalPanel(
           condition = "input.activity2_tab == 'Seasonal Cl & Discharge'",
-          h4("Site Selection"),
+          p(
+            "Toggle discharge overlay to compare Cl with streamflow seasonality.",
+            style = "font-size: 0.85em; color: #666;"
+          ),
           selectInput(
             "cl_site_select",
             "Choose a site:",
@@ -368,11 +418,6 @@ ui <- page_navbar(
             "cl_show_discharge",
             "Overlay monthly discharge",
             value = FALSE
-          ),
-          p(
-            "Toggle discharge to see how Cl concentration relates to
-            streamflow seasonality.",
-            style = "font-size: 0.85em; color: #666;"
           )
         )
       ),
@@ -381,18 +426,92 @@ ui <- page_navbar(
         id = "activity2_tab",
         nav_panel(
           "Chloride Map",
-          card(
-            full_screen = TRUE,
-            card_header("Stream Chloride Across North America"),
-            leafletOutput("cl_map", height = 600)
+          layout_columns(
+            col_widths = c(8, 4),
+            card(
+              full_screen = TRUE,
+              card_header("Stream Chloride Across North America"),
+              leafletOutput("cl_map", height = 600)
+            ),
+            card(
+              card_header("About Stream Chloride"),
+              tags$div(
+                style = "font-size: 0.88em; line-height: 1.6; padding: 8px;",
+                tags$p(HTML(
+                  "<b>Chloride (Cl<sup>&minus;</sup>)</b> is a conservative
+                  tracer &mdash; it doesn't react or degrade in most
+                  freshwater systems, making it useful for tracking sources
+                  and transport."
+                )),
+                hr(),
+                tags$p(HTML(
+                  "<b>Common sources of elevated Cl:</b>"
+                )),
+                tags$ul(
+                  tags$li("Road salt application"),
+                  tags$li("Agricultural inputs"),
+                  tags$li("Wastewater and septic"),
+                  tags$li("Marine aerosol influence")
+                ),
+                hr(),
+                tags$p(
+                  style = "color: #444;",
+                  HTML(
+                    "<b>What to look for:</b> What areas of the US have
+                    higher Cl? How do precipitation and land use correlate
+                    with Cl concentration? Try coloring by % Urban or
+                    % Cropland."
+                  )
+                )
+              )
+            )
           )
         ),
         nav_panel(
           "Seasonal Cl & Discharge",
-          card(
-            full_screen = TRUE,
-            card_header("Monthly Chloride & Discharge Patterns"),
-            plotlyOutput("cl_seasonal_plot", height = 600)
+          layout_columns(
+            col_widths = c(8, 4),
+            card(
+              full_screen = TRUE,
+              card_header("Monthly Chloride & Discharge Patterns"),
+              plotlyOutput("cl_seasonal_plot", height = 600)
+            ),
+            card(
+              card_header("Seasonal Patterns"),
+              tags$div(
+                style = "font-size: 0.88em; line-height: 1.6; padding: 8px;",
+                tags$p(
+                  "Choose a few sites from different regions. Look at
+                  how Cl varies over the course of a year."
+                ),
+                hr(),
+                tags$p(HTML(
+                  "<b>Winter Cl peaks</b> often indicate road salt
+                  runoff, especially in urban or suburban catchments."
+                )),
+                tags$p(HTML(
+                  "<b>Summer Cl peaks</b> may reflect concentration during
+                  low-flow periods when dilution is reduced."
+                )),
+                hr(),
+                tags$p(HTML(
+                  "Toggle <b>discharge overlay</b> to see the relationship
+                  between seasonal Cl and the hydrograph. Do they appear
+                  to be related?"
+                )),
+                hr(),
+                tags$p(
+                  style = "color: #444;",
+                  HTML(
+                    "<b>What to look for:</b> When do you see high Cl
+                    and when do you see low Cl? What is the relationship
+                    between seasonal Cl concentration and streamflow?
+                    What does that suggest about hydrologic and land use
+                    processes driving salinity?"
+                  )
+                )
+              )
+            )
           )
         )
       )
@@ -400,36 +519,18 @@ ui <- page_navbar(
   ),
 
   nav_panel(
-    "Activity 3: C-Q Analysis",
+    "Activity 3: Exploring C-Q Relationships",
     layout_sidebar(
       sidebar = sidebar(
         width = 300,
-        h4("Concentration-Discharge Analysis"),
-        p(
-          "The C-Q framework follows the power-law model from",
-          tags$a("Godsey et al. (2009)",
-                 href = "https://doi.org/10.1002/hyp.7315",
-                 target = "_blank"),
-          "where concentration scales with discharge as:",
-          style = "font-size: 0.9em; color: #666;"
-        ),
-        p(
-          tags$em("C = a Q"),
-          tags$sup(tags$em("b")),
-          style = "font-size: 0.95em; text-align: center; margin: 4px 0;"
-        ),
-        p(
-          "The exponent ", tags$em("b"), " is the C-Q slope, estimated here
-          via linear regression in log-log space:
-          log(C) = log(a) + b \u00b7 log(Q).",
-          style = "font-size: 0.9em; color: #666;"
-        ),
-        hr(),
-
+        h4("Controls"),
         # C-Q scatter controls
         conditionalPanel(
           condition = "input.activity3_tab == 'C-Q Relationships'",
-          h4("Select Sites & Solutes"),
+          p(
+            "Select up to 3 sites and 2 solutes to compare.",
+            style = "font-size: 0.85em; color: #666;"
+          ),
           selectInput(
             "cq_sites",
             "Sites (max 3):",
@@ -446,34 +547,21 @@ ui <- page_navbar(
             "cq_show_trendline",
             "Show trendlines",
             value = TRUE
-          ),
-          hr(),
-          p(
-            tags$b("Interpreting C-Q slopes:"), br(),
-            "Positive slope = enrichment (concentration rises with flow)", br(),
-            "Slope near 0 = chemostatic (concentration stable)", br(),
-            "Negative slope = dilution (concentration falls with flow)",
-            style = "font-size: 0.85em; color: #666;"
           )
         ),
 
         # histogram controls
         conditionalPanel(
           condition = "input.activity3_tab == 'C-Q Slope Distribution'",
-          h4("Slope Distribution"),
-          selectInput(
-            "cq_hist_solute",
-            "Select solute:",
-            choices = NULL
-          ),
-          hr(),
           p(
-            tags$b("Reading the histogram:"), br(),
-            "Each bar represents a group of sites. Sites with slopes below
-            -0.1 show dilution (concentration decreases with flow). Sites
-            above +0.1 show enrichment. Sites between -0.1 and +0.1 are
-            approximately chemostatic.",
+            "Compare C-Q slope distributions for Cl and NO3 across all sites.",
             style = "font-size: 0.85em; color: #666;"
+          ),
+          checkboxGroupInput(
+            "cq_hist_solutes",
+            "Show:",
+            choices = c("Chloride (Cl)" = "Cl", "Nitrate (NO3)" = "NO3"),
+            selected = c("Cl", "NO3")
           )
         )
       ),
@@ -482,18 +570,102 @@ ui <- page_navbar(
         id = "activity3_tab",
         nav_panel(
           "C-Q Relationships",
-          card(
-            full_screen = TRUE,
-            card_header("log₁₀(Concentration) vs log₁₀(Discharge)"),
-            plotlyOutput("cq_scatter_plot", height = 600)
+          layout_columns(
+            col_widths = c(8, 4),
+            card(
+              full_screen = TRUE,
+              card_header(HTML("log<sub>10</sub>(Concentration) vs log<sub>10</sub>(Discharge)")),
+              plotlyOutput("cq_scatter_plot", height = 600)
+            ),
+            card(
+              card_header("C-Q Framework"),
+              tags$div(
+                style = "font-size: 0.88em; line-height: 1.6; padding: 8px;",
+                tags$p(HTML(
+                  "The C-Q framework follows the power-law model from
+                  <a href='https://doi.org/10.1002/hyp.7315' target='_blank'>
+                  Godsey et al. (2009)</a>:"
+                )),
+                tags$p(
+                  style = "text-align: center; font-size: 1.05em; margin: 6px 0;",
+                  HTML("<em>C = a Q<sup>b</sup></em>")
+                ),
+                tags$p(HTML(
+                  "The exponent <em>b</em> is the C-Q slope, estimated via
+                  log-log regression: log(C) = log(a) + <em>b</em> &middot; log(Q).
+                  It tells us how solutes are stored and mobilized."
+                )),
+                hr(),
+                tags$p(HTML("<b>Interpreting C-Q slopes:</b>")),
+                tags$ul(
+                  tags$li(HTML("<b>Positive slope</b> = enrichment (concentration rises with flow)")),
+                  tags$li(HTML("<b>Slope near 0</b> = chemostatic (concentration stable)")),
+                  tags$li(HTML("<b>Negative slope</b> = dilution (concentration falls with flow)"))
+                ),
+                hr(),
+                tags$p(HTML(
+                  "<b>Cl</b> is a <em>conservative</em> tracer &mdash; it
+                  doesn't react in most freshwater systems."
+                )),
+                tags$p(HTML(
+                  "<b>NO<sub>3</sub></b> is <em>non-conservative</em> &mdash;
+                  it is actively cycled by biological and chemical processes."
+                )),
+                hr(),
+                tags$p(
+                  style = "color: #444;",
+                  HTML(
+                    "<b>What to look for:</b> How do the C-Q slopes for
+                    Cl compare to NO<sub>3</sub> at the same site? What does
+                    that tell us about the different processes controlling
+                    storage and transport of each solute?"
+                  )
+                )
+              )
+            )
           )
         ),
         nav_panel(
           "C-Q Slope Distribution",
-          card(
-            full_screen = TRUE,
-            card_header("Distribution of C-Q Slopes Across All Sites"),
-            plotlyOutput("cq_histogram", height = 600)
+          layout_columns(
+            col_widths = c(8, 4),
+            card(
+              full_screen = TRUE,
+              card_header("Distribution of C-Q Slopes Across All Sites"),
+              plotlyOutput("cq_histogram", height = 600)
+            ),
+            card(
+              card_header("Reading the Histogram"),
+              tags$div(
+                style = "font-size: 0.88em; line-height: 1.6; padding: 8px;",
+                tags$p(
+                  "Each bar represents a group of sites with similar C-Q
+                  slopes. Both Cl and NO3 are shown so you can compare
+                  their distributions directly."
+                ),
+                hr(),
+                tags$p(HTML(
+                  "The dashed lines at <b>&plusmn;0.1</b> mark the boundaries
+                  between behavioral regimes:"
+                )),
+                tags$ul(
+                  tags$li(HTML("Left of &minus;0.1: <b>Dilution</b> &mdash; concentration decreases with flow")),
+                  tags$li(HTML("Between &plusmn;0.1: <b>Chemostatic</b> &mdash; concentration is stable")),
+                  tags$li(HTML("Right of +0.1: <b>Enrichment</b> &mdash; concentration increases with flow"))
+                ),
+                hr(),
+                tags$p(
+                  style = "color: #444;",
+                  HTML(
+                    "<b>What to look for:</b> Which solute has a larger
+                    range of slopes? Which is more likely to be chemostatic?
+                    What does this tell you about the processes controlling
+                    storage and transport of Cl compared to
+                    NO<sub>3</sub>?"
+                  )
+                )
+              )
+            )
           )
         )
       )
@@ -521,10 +693,11 @@ server <- function(input, output, session) {
 
   discharge_data <- reactive({ discharge_global })
 
-  # bin sites by annual snow days for the scatter plots
+  # bin sites by snow days and precipitation regime
   harmonized_with_categories <- reactive({
     harmonized_complete() %>%
-      filter(!is.na(RBI), !is.na(recession_slope), !is.na(mean_snow_days)) %>%
+      filter(!is.na(RBI), !is.na(recession_slope),
+             !is.na(mean_snow_days), !is.na(snow_fraction)) %>%
       mutate(
         snow_cat = case_when(
           mean_snow_days < 40 ~ "Low (0-40 days)",
@@ -538,6 +711,15 @@ server <- function(input, output, session) {
             "Medium (40-80 days)",
             "High (80+ days)"
           )
+        ),
+        precip_regime = if_else(
+          snow_fraction < 0.25,
+          "Rain-dominated",
+          "Snow-dominated"
+        ),
+        precip_regime = factor(
+          precip_regime,
+          levels = c("Rain-dominated", "Snow-dominated")
         )
       )
   })
@@ -545,69 +727,58 @@ server <- function(input, output, session) {
   output$overview_table <- renderTable({
     data.frame(
       Metric = c(
-        "Total North American Sites",
-        "Sites with Discharge Data",
-        "Sites with Complete Data",
-        "LTER Networks Represented"
+        "Sites on Map",
+        "LTER Networks"
       ),
       Count = c(
-        nrow(harmonized_partial()),
-        sum(!is.na(harmonized_partial()$RBI)),
         nrow(harmonized_complete()),
         length(unique(harmonized_complete()$LTER))
       )
     )
   })
 
-  # populate the LTER filter checkboxes once data loads
-  observe({
-    lter_choices <- sort(unique(harmonized_complete()$LTER))
-    updateCheckboxGroupInput(
-      session,
-      "map_lter",
-      choices = lter_choices,
-      selected = lter_choices
-    )
+  # only show LTERs that have sites with coordinates in the complete dataset
+  lter_with_data <- reactive({
+    harmonized_complete() %>%
+      filter(!is.na(Latitude), !is.na(Longitude)) %>%
+      pull(LTER) %>%
+      unique() %>%
+      sort()
   })
 
-  # populate the per-category site dropdowns in Activity 1
+  observe({
+    choices <- lter_with_data()
+    updateCheckboxGroupInput(session, "map_lter", choices = choices, selected = choices)
+  })
+
+  observeEvent(input$lter_all, {
+    updateCheckboxGroupInput(session, "map_lter", selected = lter_with_data())
+  })
+
+  observeEvent(input$lter_none, {
+    updateCheckboxGroupInput(session, "map_lter", selected = character(0))
+  })
+
+  # populate the per-regime site dropdowns in Activity 1
   observe({
     site_data <- harmonized_with_categories()
 
-    # helper to build named choice vectors for selectInput
     make_choices <- function(df) {
       df <- df %>% arrange(Stream_Name)
       setNames(
         df$Stream_ID,
-        paste0(
-          df$Stream_Name,
-          " [",
-          df$LTER,
-          ", ",
-          round(df$mean_snow_days, 0),
-          " days]"
-        )
+        paste0(df$Stream_Name, " [", df$LTER, ", ",
+               round(df$snow_fraction * 100, 0), "% snow]")
       )
     }
 
-    low_choices <- make_choices(filter(
-      site_data,
-      snow_cat == "Low (0-40 days)"
-    ))
-    medium_choices <- make_choices(filter(
-      site_data,
-      snow_cat == "Medium (40-80 days)"
-    ))
-    high_choices <- make_choices(filter(
-      site_data,
-      snow_cat == "High (80+ days)"
-    ))
-    all_choices <- make_choices(arrange(site_data, snow_cat, Stream_Name))
+    rain_choices <- make_choices(filter(site_data, precip_regime == "Rain-dominated"))
+    snow_dom_choices <- make_choices(filter(site_data, precip_regime == "Snow-dominated"))
 
-    updateSelectInput(session, "low_snow_sites", choices = low_choices)
-    updateSelectInput(session, "medium_snow_sites", choices = medium_choices)
-    updateSelectInput(session, "high_snow_sites", choices = high_choices)
-    updateSelectInput(session, "highlight_sites", choices = all_choices)
+    updateSelectInput(session, "rain_dom_sites", choices = rain_choices)
+    updateSelectInput(session, "snow_dom_sites", choices = snow_dom_choices)
+    updateSelectInput(session, "highlight_rain", choices = rain_choices)
+    updateSelectInput(session, "highlight_snow_dom", choices = snow_dom_choices)
   })
 
   # --- Map -----------------------------------------------------------------
@@ -642,21 +813,36 @@ server <- function(input, output, session) {
       "#e7298a"
     )
 
-    color_var <- map_data[[input$map_color_by]]
-    legend_title <- gsub("_", " ", input$map_color_by)
+    map_data <- map_data %>% filter(!is.na(.data[[input$map_color_by]]))
 
-    # numeric columns get a gradient, categorical get distinct colors
-    if (input$map_color_by %in% c("RBI", "recession_slope", "snow_fraction")) {
+    # clean up major_land labels: remove underscores, title case
+    if (input$map_color_by == "major_land") {
+      map_data <- map_data %>%
+        mutate(major_land = gsub("_", " ", major_land) %>% tools::toTitleCase())
+    }
+
+    color_var <- map_data[[input$map_color_by]]
+
+    legend_titles <- c(
+      "Name" = "Climate Zone",
+      "snow_fraction" = "Snow Fraction",
+      "mean_annual_precip" = "MAP (mm)",
+      "RBI" = "RBI",
+      "recession_slope" = "RCS",
+      "major_land" = "LULC",
+      "LTER" = "LTER Network"
+    )
+    legend_title <- legend_titles[[input$map_color_by]]
+
+    if (input$map_color_by %in% c("RBI", "recession_slope", "snow_fraction", "mean_annual_precip")) {
       pal <- colorNumeric(
         palette = c("#d67e7e", "#e6c79c", "#7fb069", "#6b9bd1", "#5a7fa8"),
-        domain = color_var,
-        na.color = "#cccccc"
+        domain = color_var
       )
     } else {
       pal <- colorFactor(
         palette = distinct_colors,
-        domain = color_var,
-        na.color = "#cccccc"
+        domain = color_var
       )
     }
 
@@ -685,7 +871,7 @@ server <- function(input, output, session) {
           round(recession_slope, 3),
           "<br>",
           "Climate: ",
-          ClimateZ,
+          Name,
           "<br>",
           "Snow Fraction: ",
           round(snow_fraction, 3),
@@ -697,7 +883,7 @@ server <- function(input, output, session) {
         label = ~Stream_Name
       ) %>%
       addLegend(
-        "bottomright",
+        "bottomleft",
         pal = pal,
         values = color_var,
         title = legend_title,
@@ -708,28 +894,19 @@ server <- function(input, output, session) {
   # --- Hydrograph ----------------------------------------------------------
 
   hydrograph_data <- eventReactive(input$plot_hydrographs, {
-    all_selected <- c(
-      input$low_snow_sites,
-      input$medium_snow_sites,
-      input$high_snow_sites
-    )
+    all_selected <- c(input$rain_dom_sites, input$snow_dom_sites)
 
     if (length(all_selected) < 2) return(NULL)
 
     selected_sites <- harmonized_with_categories() %>%
       filter(Stream_ID %in% all_selected) %>%
-      select(Stream_ID, Stream_Name, LTER, snow_cat, mean_snow_days)
+      select(Stream_ID, Stream_Name, LTER, precip_regime, snow_fraction)
 
     discharge_data() %>%
       filter(Stream_ID %in% all_selected) %>%
       left_join(selected_sites, by = c("Stream_ID", "Stream_Name", "LTER")) %>%
       mutate(
-        site_label = paste0(
-          Stream_Name,
-          " (",
-          gsub(" \\(.*", "", snow_cat),
-          " snow)"
-        )
+        site_label = paste0(Stream_Name, " (", precip_regime, ")")
       )
   })
 
@@ -767,160 +944,86 @@ server <- function(input, output, session) {
 
   # --- RCS vs RBI scatter (all sites, filterable by snow category) ---------
 
+  all_highlighted <- reactive({
+    c(input$highlight_rain, input$highlight_snow_dom)
+  })
+
   output$rcs_rbi_plot <- renderPlotly({
-    req(input$show_snow_categories)
+    req(input$show_regime_categories)
 
     plot_data <- harmonized_with_categories() %>%
-      filter(snow_cat %in% input$show_snow_categories) %>%
-      mutate(is_highlighted = Stream_ID %in% input$highlight_sites)
+      filter(precip_regime %in% input$show_regime_categories) %>%
+      mutate(is_highlighted = Stream_ID %in% all_highlighted())
 
     if (nrow(plot_data) == 0) {
       return(
         plotly_empty() %>%
           layout(
             title = list(
-              text = "Select at least one snow category to display",
+              text = "Select at least one category to display",
               font = list(color = "#666", size = 14)
             )
           )
       )
     }
 
+    hover_text <- paste0(
+      "<b>", plot_data$Stream_Name, "</b><br>",
+      "LTER: ", plot_data$LTER, "<br>",
+      "Regime: ", plot_data$precip_regime, "<br>",
+      "fSnow: ", round(plot_data$snow_fraction * 100, 0), "%<br>",
+      "Snow Days/Year: ", round(plot_data$mean_snow_days, 0), "<br>",
+      "RBI: ", round(plot_data$RBI, 3), "<br>",
+      "RCS: ", round(plot_data$recession_slope, 3)
+    )
+
     p <- ggplot(
       plot_data,
-      aes(
-        x = RBI,
-        y = recession_slope,
-        color = snow_cat,
-        alpha = is_highlighted,
-        size = is_highlighted,
-        text = paste0(
-          "<b>",
-          Stream_Name,
-          "</b><br>",
-          "LTER: ",
-          LTER,
-          "<br>",
-          "Snow Category: ",
-          snow_cat,
-          "<br>",
-          "Snow Days/Year: ",
-          round(mean_snow_days, 0),
-          "<br>",
-          "RBI: ",
-          round(RBI, 3),
-          "<br>",
-          "RCS: ",
-          round(recession_slope, 3)
-        )
-      )
+      aes(x = RBI, y = recession_slope,
+          color = precip_regime, text = hover_text)
     ) +
-      geom_point() +
+      geom_point(size = 3, alpha = 0.5) +
       labs(
         x = "Richards-Baker Flashiness Index (RBI)\n(higher = more flashy)",
         y = "Recession Curve Slope (RCS)\n(higher = faster drainage)",
-        color = "Snow Category",
-        title = "Do low snow sites have different flashiness than high snow sites?"
+        color = "Precipitation Regime"
       ) +
       base_plot_theme +
-      theme(
-        plot.title = element_text(size = 11, color = "#666", face = "italic")
-      ) +
-      scale_color_manual(values = snow_colors) +
-      scale_alpha_manual(
-        values = c("FALSE" = 0.4, "TRUE" = 1),
-        guide = "none"
-      ) +
-      scale_size_manual(values = c("FALSE" = 2, "TRUE" = 4), guide = "none")
+      scale_color_manual(values = regime_colors)
+
+    if (any(plot_data$is_highlighted)) {
+      highlight_df <- filter(plot_data, is_highlighted)
+      highlight_text <- paste0(
+        "<b>", highlight_df$Stream_Name, "</b><br>",
+        "LTER: ", highlight_df$LTER, "<br>",
+        "Regime: ", highlight_df$precip_regime, "<br>",
+        "fSnow: ", round(highlight_df$snow_fraction * 100, 0), "%<br>",
+        "RBI: ", round(highlight_df$RBI, 3), "<br>",
+        "RCS: ", round(highlight_df$recession_slope, 3)
+      )
+      p <- p +
+        geom_point(
+          data = highlight_df,
+          aes(text = highlight_text),
+          size = 5, alpha = 1, show.legend = FALSE
+        ) +
+        geom_text(
+          data = highlight_df,
+          aes(label = Stream_Name),
+          hjust = -0.1, vjust = 0, size = 3,
+          show.legend = FALSE
+        )
+    }
 
     ggplotly(p, tooltip = "text") %>%
       layout(
         paper_bgcolor = plotly_bg$paper_bgcolor,
         plot_bgcolor = plotly_bg$plot_bgcolor,
+        legend = list(orientation = "h", y = -0.15),
         title = list(
-          text = "Do low snow sites have different flashiness than high snow sites?",
+          text = "Do rain- and snow-dominated sites differ in flashiness?",
           font = list(size = 12, color = "#666")
         )
-      )
-  })
-
-  # --- RCS vs RBI scatter (just the highlighted sites, with labels) --------
-
-  output$rcs_rbi_highlight_plot <- renderPlotly({
-    if (length(input$highlight_sites) == 0) {
-      return(
-        plotly_empty() %>%
-          layout(
-            title = list(
-              text = "Select sites from the dropdown to see detailed comparison",
-              font = list(color = "#666", size = 14)
-            )
-          )
-      )
-    }
-
-    plot_data <- harmonized_with_categories() %>%
-      filter(Stream_ID %in% input$highlight_sites)
-
-    if (nrow(plot_data) == 0) {
-      return(
-        plotly_empty() %>%
-          layout(
-            title = list(
-              text = "No data for selected sites",
-              font = list(color = "#666", size = 14)
-            )
-          )
-      )
-    }
-
-    p <- ggplot(
-      plot_data,
-      aes(
-        x = RBI,
-        y = recession_slope,
-        color = snow_cat,
-        text = paste0(
-          "<b>",
-          Stream_Name,
-          "</b><br>",
-          "LTER: ",
-          LTER,
-          "<br>",
-          "Snow Category: ",
-          snow_cat,
-          "<br>",
-          "Snow Days/Year: ",
-          round(mean_snow_days, 0),
-          "<br>",
-          "RBI: ",
-          round(RBI, 3),
-          "<br>",
-          "RCS: ",
-          round(recession_slope, 3)
-        )
-      )
-    ) +
-      geom_point(size = 5, alpha = 0.8) +
-      geom_text(
-        aes(label = Stream_Name),
-        hjust = -0.1,
-        vjust = 0,
-        size = 3,
-        show.legend = FALSE
-      ) +
-      labs(
-        x = "Richards-Baker Flashiness Index (RBI)\n(higher = more flashy)",
-        y = "Recession Curve Slope (RCS)\n(higher = faster drainage)",
-        color = "Snow Category"
-      ) +
-      base_plot_theme +
-      scale_color_manual(values = snow_colors)
-
-    ggplotly(p, tooltip = "text") %>%
-      layout(
-        paper_bgcolor = plotly_bg$paper_bgcolor,
-        plot_bgcolor = plotly_bg$plot_bgcolor
       )
   })
 
@@ -965,9 +1068,6 @@ server <- function(input, output, session) {
     req(nrow(map_data) > 0)
 
     color_var_name <- input$cl_map_color
-    color_vals <- map_data[[color_var_name]]
-
-    # label for legend
     legend_labels <- c(
       "mean_Cl_uM" = "Mean Cl (uM)",
       "land_cropland" = "% Cropland",
@@ -976,34 +1076,40 @@ server <- function(input, output, session) {
     )
     legend_title <- legend_labels[[color_var_name]]
 
-    # continuous palette
-    pal <- colorNumeric(
-      palette = viridis(256),
-      domain = color_vals,
-      na.color = "#cccccc"
-    )
+    map_data <- map_data %>% filter(!is.na(.data[[color_var_name]]))
+    color_vals <- map_data[[color_var_name]]
 
-    leaflet(map_data) %>%
+    use_log <- isTRUE(input$cl_log_scale) & all(color_vals > 0, na.rm = TRUE)
+
+    if (use_log) {
+      pal <- colorNumeric(
+        viridis(256),
+        domain = log10(color_vals)
+      )
+      fill_colors <- pal(log10(color_vals))
+      legend_title <- paste0(legend_title, " (log\u2081\u2080)")
+    } else {
+      # quantile breaks so outliers don't crush the range
+      breaks <- unique(quantile(color_vals, probs = seq(0, 1, length.out = 7), na.rm = TRUE))
+      pal <- colorBin(
+        viridis(max(length(breaks) - 1, 1)),
+        domain = color_vals,
+        bins = breaks
+      )
+      fill_colors <- pal(color_vals)
+    }
+
+    m <- leaflet(map_data) %>%
       addTiles() %>%
-      addHeatmap(
-        lng = ~Longitude,
-        lat = ~Latitude,
-        intensity = ~mean_Cl_uM,
-        blur = 20,
-        max = quantile(map_data$mean_Cl_uM, 0.95, na.rm = TRUE),
-        radius = 15,
-        group = "Heatmap"
-      ) %>%
       addCircleMarkers(
         lng = ~Longitude,
         lat = ~Latitude,
         radius = 6,
-        fillColor = ~ pal(color_vals),
+        fillColor = fill_colors,
         color = "#2d2926",
         weight = 1,
-        opacity = 0.8,
-        fillOpacity = 0.7,
-        group = "Sites",
+        opacity = 0.6,
+        fillOpacity = 0.5,
         popup = ~ paste0(
           "<b>", Stream_Name, "</b><br>",
           "LTER: ", LTER, "<br>",
@@ -1013,18 +1119,26 @@ server <- function(input, output, session) {
           "Precip: ", round(mean_annual_precip, 0), " mm/yr"
         ),
         label = ~Stream_Name
-      ) %>%
-      addLayersControl(
-        overlayGroups = c("Heatmap", "Sites"),
-        options = layersControlOptions(collapsed = FALSE)
-      ) %>%
-      addLegend(
-        "bottomright",
-        pal = pal,
+      )
+
+    if (use_log) {
+      m <- m %>% addLegend(
+        "bottomleft", pal = pal,
+        values = log10(color_vals),
+        title = legend_title,
+        opacity = 0.7,
+        labFormat = labelFormat(transform = function(x) round(10^x, 1))
+      )
+    } else {
+      m <- m %>% addLegend(
+        "bottomleft", pal = pal,
         values = color_vals,
         title = legend_title,
         opacity = 0.7
       )
+    }
+
+    m
   })
 
   # --- Seasonal Cl & Discharge plot -----------------------------------------
@@ -1156,18 +1270,9 @@ server <- function(input, output, session) {
     )
   })
 
-  # friendly labels for the 10 target solutes
   cq_solute_choices <- c(
     "Chloride (Cl)" = "Cl",
-    "Nitrate (NO3)" = "NO3",
-    "Sulfate (SO4)" = "SO4",
-    "Calcium (Ca)" = "Ca",
-    "Magnesium (Mg)" = "Mg",
-    "Sodium (Na)" = "Na",
-    "Potassium (K)" = "K",
-    "Dissolved Silica (DSi)" = "DSi",
-    "Phosphate (PO4)" = "PO4",
-    "Dissolved Org C (DOC)" = "DOC"
+    "Nitrate (NO3)" = "NO3"
   )
 
   # populate site dropdown — only sites that have C-Q slopes
@@ -1184,28 +1289,17 @@ server <- function(input, output, session) {
     updateSelectInput(session, "cq_sites", choices = choices)
   })
 
-  # populate solute dropdowns with only solutes present in the data
+  # populate solute dropdown with available solutes
   observe({
     available <- unique(cq_slopes_data()$variable)
     scatter_choices <- cq_solute_choices[cq_solute_choices %in% available]
-    hist_choices <- scatter_choices
     updateSelectInput(session, "cq_solutes", choices = scatter_choices)
-    updateSelectInput(session, "cq_hist_solute", choices = hist_choices,
-                      selected = hist_choices[1])
   })
 
   # enforce max 3 sites
-
   observe({
     if (length(input$cq_sites) > 3) {
       updateSelectInput(session, "cq_sites", selected = input$cq_sites[1:3])
-    }
-  })
-
-  # enforce max 2 solutes
-  observe({
-    if (length(input$cq_solutes) > 2) {
-      updateSelectInput(session, "cq_solutes", selected = input$cq_solutes[1:2])
     }
   })
 
@@ -1329,44 +1423,57 @@ server <- function(input, output, session) {
   # --- C-Q Slope Histogram ----------------------------------------------------
 
   output$cq_histogram <- renderPlotly({
-    req(input$cq_hist_solute)
+    req(input$cq_hist_solutes)
 
     slopes <- cq_slopes_data() %>%
-      filter(variable == input$cq_hist_solute)
+      filter(variable %in% input$cq_hist_solutes)
 
     if (nrow(slopes) == 0) {
       return(
         plotly_empty() %>%
           layout(title = list(
-            text = "No C-Q slopes available for this solute",
+            text = "No C-Q slopes available",
             font = list(color = "#666", size = 14)
           ))
       )
     }
 
-    solute_label <- names(cq_solute_choices)[cq_solute_choices == input$cq_hist_solute]
-    med_slope <- median(slopes$cq_slope, na.rm = TRUE)
-
-    # y-range for annotation placement
+    # y-range for annotation placement (use combined data)
     hist_obj <- hist(slopes$cq_slope, plot = FALSE)
     y_max <- max(hist_obj$counts) * 1.1
 
-    plot_ly(
-      x = slopes$cq_slope,
-      type = "histogram",
-      marker = list(color = "#6b9bd1", line = list(color = "#5a7fa8", width = 1)),
-      name = solute_label,
-      hovertemplate = "Slope: %{x:.2f}<br>Count: %{y}<extra></extra>"
-    ) %>%
+    solute_colors <- c("Cl" = "#6b9bd1", "NO3" = "#7fb069")
+
+    p <- plot_ly()
+    for (sol in input$cq_hist_solutes) {
+      sol_data <- filter(slopes, variable == sol)
+      sol_label <- names(cq_solute_choices)[cq_solute_choices == sol]
+      p <- p %>%
+        add_histogram(
+          x = sol_data$cq_slope,
+          name = sol_label,
+          marker = list(
+            color = paste0(solute_colors[[sol]], "99"),
+            line = list(color = solute_colors[[sol]], width = 1)
+          ),
+          hovertemplate = paste0(
+            sol_label, "<br>Slope: %{x:.2f}<br>Count: %{y}<extra></extra>"
+          )
+        )
+    }
+
+    p %>%
       layout(
+        barmode = "overlay",
         title = list(
-          text = paste0("C-Q Slope Distribution — ", solute_label),
+          text = "C-Q Slope Distribution \u2014 Cl vs NO3",
           font = list(size = 14, color = "#2d2926")
         ),
         xaxis = list(title = "C-Q Slope", gridcolor = "#d4e3f0"),
         yaxis = list(title = "Number of Sites", gridcolor = "#d4e3f0"),
         paper_bgcolor = plotly_bg$paper_bgcolor,
         plot_bgcolor = plotly_bg$plot_bgcolor,
+        legend = list(orientation = "h", y = -0.15),
         shapes = list(
           list(
             type = "line",

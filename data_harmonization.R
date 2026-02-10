@@ -194,10 +194,11 @@ write.csv(harmonized_data,
           file.path(data_path, "harmonized_north_america_partial.csv"),
           row.names = FALSE)
 
-# complete cases: only sites that have all the key fields the app needs
+# complete cases: RBI, RCS, climate zone, precip, snow, land cover
 complete_cases <- harmonized_data %>%
   filter(!is.na(RBI), !is.na(recession_slope),
-         !is.na(ClimateZ), !is.na(basin_slope_mean_degree))
+         !is.na(ClimateZ), !is.na(mean_annual_precip),
+         !is.na(snow_fraction), !is.na(major_land))
 
 write.csv(complete_cases,
           file.path(data_path, "harmonized_north_america_complete.csv"),
@@ -259,10 +260,10 @@ write.csv(harmonized_with_cl,
 
 
 # --- Pre-compute C-Q paired observations and slopes for Activity 3 ----------
-# Pairs same-day chemistry + discharge for 10 target solutes, then fits
+# Pairs same-day chemistry + discharge for Cl and NO3, then fits
 # log-log regressions to get C-Q slopes per site×solute.
 
-cq_solutes <- c("Cl", "NO3", "SO4", "Ca", "Mg", "Na", "K", "DSi", "PO4", "DOC")
+cq_solutes <- c("Cl", "NO3")
 
 # paired observations: inner join chem + discharge on Stream_ID + date
 cq_chem <- chem_na %>%
