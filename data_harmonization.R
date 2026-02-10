@@ -2,19 +2,22 @@
 # Adapted from LTER-SiSyn-Spatial-Controls harmonization workflow
 #
 # Reads raw chemistry, discharge, climate, spatial driver, and land use CSVs,
-# then builds two output files the Shiny app needs:
+# then builds everything the Shiny app needs:
 #   - harmonized_north_america_partial.csv  (all NA sites, some fields may be NA)
 #   - harmonized_north_america_complete.csv (only sites with RBI + RCS + climate + slope)
+#   - discharge_north_america.csv           (pre-filtered discharge so the app doesn't load 920 MB)
+#   - cl_monthly_summary.csv               (monthly mean Cl per site for Activity 2)
+#   - cq_paired_obs.csv                    (same-day chem+discharge pairs for Activity 3)
+#   - cq_slopes.csv                        (C-Q slopes per site×solute for Activity 3)
 #
-# Set DATA_PATH env var to your data directory before running, e.g.:
-#   Sys.setenv(DATA_PATH = "/path/to/your/data")
+# Update data_path below to point at your local data directory.
 
 rm(list = ls())
 
 if (!require("librarian")) install.packages("librarian")
 librarian::shelf(dplyr, ggplot2, data.table, lubridate, tidyr, stringr, readr)
 
-data_path <- Sys.getenv("DATA_PATH", "data")
+data_path <- "/Users/sidneybush/Library/CloudStorage/Box-Box/Hydrology_Lab/CUAHSI-teaching-modules-shiny/data"
 
 # standardizes the LTER + Stream_Name combo into a single join key
 create_stream_id <- function(df) {
@@ -200,5 +203,109 @@ write.csv(complete_cases,
           file.path(data_path, "harmonized_north_america_complete.csv"),
           row.names = FALSE)
 
-message("Done — wrote ", nrow(harmonized_data), " partial and ",
-        nrow(complete_cases), " complete sites to ", data_path)
+
+# --- Pre-filter discharge for the app ----------------------------------------
+# The raw discharge file is ~920 MB. Save just the NA-filtered subset so the
+# app doesn't have to load the full thing on every startup.
+
+discharge_na_export <- discharge_na %>%
+  rename(Qcms = Q) %>%
+  select(Qcms, Date, LTER, Stream_Name, Stream_ID)
+
+write.csv(discharge_na_export,
+          file.path(data_path, "discharge_north_america.csv"),
+          row.names = FALSE)
+
+
+# --- Pre-compute Cl summaries for Activity 2 --------------------------------
+# Avoids loading the full 345 MB chem file at app startup
+
+cl_data <- chem_na %>%
+  filter(variable == "Cl", !is.na(value)) %>%
+  mutate(date = as.Date(date),
+         month = month(date))
+
+# site-level summary: mean, median, observation count
+cl_site_stats <- cl_data %>%
+  group_by(Stream_ID, LTER, Stream_Name) %>%
+  summarise(
+    mean_Cl_uM = mean(value, na.rm = TRUE),
+    median_Cl_uM = median(value, na.rm = TRUE),
+    n_obs = n(),
+    .groups = "drop"
+  )
+
+# monthly averages per site (for seasonal plot)
+cl_monthly <- cl_data %>%
+  group_by(Stream_ID, LTER, Stream_Name, month) %>%
+  summarise(
+    mean_Cl_uM = mean(value, na.rm = TRUE),
+    n_obs = n(),
+    .groups = "drop"
+  )
+
+write.csv(cl_monthly,
+          file.path(data_path, "cl_monthly_summary.csv"),
+          row.names = FALSE)
+
+# add site-level mean Cl to the harmonized partial file
+harmonized_with_cl <- harmonized_data %>%
+  left_join(cl_site_stats %>% select(Stream_ID, mean_Cl_uM, median_Cl_uM, n_cl_obs = n_obs),
+            by = "Stream_ID")
+
+write.csv(harmonized_with_cl,
+          file.path(data_path, "harmonized_north_america_partial.csv"),
+          row.names = FALSE)
+
+
+# --- Pre-compute C-Q paired observations and slopes for Activity 3 ----------
+# Pairs same-day chemistry + discharge for 10 target solutes, then fits
+# log-log regressions to get C-Q slopes per site×solute.
+
+cq_solutes <- c("Cl", "NO3", "SO4", "Ca", "Mg", "Na", "K", "DSi", "PO4", "DOC")
+
+# paired observations: inner join chem + discharge on Stream_ID + date
+cq_chem <- chem_na %>%
+  filter(variable %in% cq_solutes, !is.na(value), value > 0) %>%
+  mutate(date = as.Date(date)) %>%
+  select(Stream_ID, LTER, Stream_Name, date, variable, value)
+
+# average duplicate discharge dates per site before joining
+cq_discharge <- discharge_na %>%
+  filter(Q > 0) %>%
+  group_by(Stream_ID, Date) %>%
+  summarise(Q = mean(Q), .groups = "drop") %>%
+  rename(date = Date)
+
+cq_paired <- cq_chem %>%
+  inner_join(cq_discharge, by = c("Stream_ID", "date"))
+
+write.csv(cq_paired,
+          file.path(data_path, "cq_paired_obs.csv"),
+          row.names = FALSE)
+
+
+# slopes: log-log regression per site×solute (min 10 observations)
+fit_cq_slope <- function(df) {
+  empty <- data.frame(n_paired_obs = integer(0), cq_slope = numeric(0), r_squared = numeric(0))
+  if (nrow(df) < 10) return(empty)
+  mod <- tryCatch(
+    lm(log10(value) ~ log10(Q), data = df),
+    error = function(e) NULL
+  )
+  if (is.null(mod)) return(empty)
+  data.frame(
+    n_paired_obs = nrow(df),
+    cq_slope = unname(coef(mod)[2]),
+    r_squared = summary(mod)$r.squared
+  )
+}
+
+cq_slopes <- cq_paired %>%
+  group_by(Stream_ID, LTER, Stream_Name, variable) %>%
+  group_modify(~ fit_cq_slope(.x)) %>%
+  ungroup()
+
+write.csv(cq_slopes,
+          file.path(data_path, "cq_slopes.csv"),
+          row.names = FALSE)
