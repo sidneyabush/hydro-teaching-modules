@@ -524,6 +524,28 @@ ui <- page_navbar(
       sidebar = sidebar(
         width = 300,
         h4("Controls"),
+
+        # time series controls
+        conditionalPanel(
+          condition = "input.activity3_tab == 'Site Time Series'",
+          p(
+            "Start by examining the hydrograph and concentration patterns
+            for a single site before plotting C vs Q.",
+            style = "font-size: 0.85em; color: #666;"
+          ),
+          selectInput(
+            "cq_ts_site",
+            "Select a site:",
+            choices = NULL
+          ),
+          checkboxGroupInput(
+            "cq_ts_solutes",
+            "Overlay concentration:",
+            choices = c("Chloride (Cl)" = "Cl", "Nitrate (NO3)" = "NO3"),
+            selected = "Cl"
+          )
+        ),
+
         # C-Q scatter controls
         conditionalPanel(
           condition = "input.activity3_tab == 'C-Q Relationships'",
@@ -568,6 +590,47 @@ ui <- page_navbar(
 
       navset_card_tab(
         id = "activity3_tab",
+        nav_panel(
+          "Site Time Series",
+          layout_columns(
+            col_widths = c(8, 4),
+            card(
+              full_screen = TRUE,
+              card_header("Discharge & Concentration Over Time"),
+              plotlyOutput("cq_timeseries_plot", height = 600)
+            ),
+            card(
+              card_header("Getting Started"),
+              tags$div(
+                style = "font-size: 0.88em; line-height: 1.6; padding: 8px;",
+                tags$p(
+                  "Start by examining the hydrograph for a single site.
+                  Identify periods of low flow and high flow."
+                ),
+                hr(),
+                tags$p(HTML(
+                  "Then overlay <b>Cl</b> concentration. Where are
+                  concentrations high and where are they low? How do they
+                  relate to the flow periods you identified?"
+                )),
+                tags$p(HTML(
+                  "Try adding <b>NO<sub>3</sub></b> as well. Does it
+                  follow the same pattern as Cl?"
+                )),
+                hr(),
+                tags$p(
+                  style = "color: #444;",
+                  HTML(
+                    "<b>Next step:</b> Once you see how concentration
+                    relates to discharge over time, move to the
+                    <em>C-Q Relationships</em> tab to plot them directly
+                    against each other."
+                  )
+                )
+              )
+            )
+          )
+        ),
         nav_panel(
           "C-Q Relationships",
           layout_columns(
@@ -900,13 +963,19 @@ server <- function(input, output, session) {
 
     selected_sites <- harmonized_with_categories() %>%
       filter(Stream_ID %in% all_selected) %>%
-      select(Stream_ID, Stream_Name, LTER, precip_regime, snow_fraction)
+      select(Stream_ID, Stream_Name, LTER, precip_regime,
+             snow_fraction, RBI, recession_slope)
 
     discharge_data() %>%
       filter(Stream_ID %in% all_selected) %>%
       left_join(selected_sites, by = c("Stream_ID", "Stream_Name", "LTER")) %>%
       mutate(
-        site_label = paste0(Stream_Name, " (", precip_regime, ")")
+        site_label = paste0(
+          Stream_Name,
+          " (", precip_regime,
+          " | RBI=", round(RBI, 3),
+          ", RCS=", round(recession_slope, 3), ")"
+        )
       )
   })
 
@@ -1287,6 +1356,7 @@ server <- function(input, output, session) {
       paste0(sites$Stream_Name, " [", sites$LTER, "]")
     )
     updateSelectInput(session, "cq_sites", choices = choices)
+    updateSelectInput(session, "cq_ts_site", choices = choices)
   })
 
   # populate solute dropdown with available solutes
@@ -1309,6 +1379,112 @@ server <- function(input, output, session) {
     c("#a8d89a", "#3d7a2e"),
     c("#e8a5a5", "#b03a3a")
   )
+
+  # --- C-Q Scatter Plot -------------------------------------------------------
+
+  # --- C-Q Site Time Series ---------------------------------------------------
+
+  output$cq_timeseries_plot <- renderPlotly({
+    req(input$cq_ts_site)
+
+    site_id <- input$cq_ts_site
+
+    # daily discharge for this site
+    q_data <- discharge_data() %>%
+      filter(Stream_ID == site_id) %>%
+      arrange(Date)
+
+    if (nrow(q_data) == 0) {
+      return(
+        plotly_empty() %>%
+          layout(title = list(
+            text = "No discharge data for this site",
+            font = list(color = "#666", size = 14)
+          ))
+      )
+    }
+
+    site_name <- q_data$Stream_Name[1]
+    site_lter <- q_data$LTER[1]
+
+    p <- plot_ly() %>%
+      add_trace(
+        data = q_data,
+        x = ~Date,
+        y = ~Qcms,
+        type = "scatter",
+        mode = "lines",
+        name = "Discharge (cms)",
+        line = list(color = "#999999", width = 1),
+        hovertemplate = "Date: %{x}<br>Q: %{y:.4f} cms<extra></extra>"
+      )
+
+    # overlay selected solute concentrations from the paired C-Q data
+    solute_colors <- c("Cl" = "#6b9bd1", "NO3" = "#7fb069")
+
+    if (length(input$cq_ts_solutes) > 0) {
+      chem <- cq_paired_data() %>%
+        filter(Stream_ID == site_id, variable %in% input$cq_ts_solutes)
+
+      for (sol in input$cq_ts_solutes) {
+        sol_data <- filter(chem, variable == sol)
+        if (nrow(sol_data) == 0) next
+        sol_label <- names(cq_solute_choices)[cq_solute_choices == sol]
+        p <- p %>%
+          add_trace(
+            data = sol_data,
+            x = ~date,
+            y = ~value,
+            type = "scatter",
+            mode = "markers",
+            name = sol_label,
+            yaxis = "y2",
+            marker = list(
+              color = solute_colors[[sol]],
+              size = 4,
+              opacity = 0.6
+            ),
+            hovertemplate = paste0(
+              sol_label, "<br>Date: %{x}<br>",
+              "Conc: %{y:.2f}<extra></extra>"
+            )
+          )
+      }
+    }
+
+    has_conc <- length(input$cq_ts_solutes) > 0
+
+    p %>%
+      layout(
+        title = list(
+          text = paste0(site_name, " (", site_lter, ")"),
+          font = list(size = 14, color = "#2d2926")
+        ),
+        xaxis = list(title = "Date", gridcolor = "#d4e3f0"),
+        yaxis = list(
+          title = list(text = "Discharge (cms)", font = list(color = "#999999")),
+          gridcolor = "#d4e3f0",
+          tickfont = list(color = "#999999")
+        ),
+        yaxis2 = if (has_conc) {
+          list(
+            title = list(
+              text = "Concentration",
+              font = list(color = "#2d2926")
+            ),
+            overlaying = "y",
+            side = "right",
+            showgrid = FALSE
+          )
+        } else {
+          list(overlaying = "y", side = "right", visible = FALSE)
+        },
+        paper_bgcolor = plotly_bg$paper_bgcolor,
+        plot_bgcolor = plotly_bg$plot_bgcolor,
+        legend = list(orientation = "h", y = -0.15),
+        margin = list(r = if (has_conc) 80 else 20)
+      )
+  })
 
   # --- C-Q Scatter Plot -------------------------------------------------------
 
