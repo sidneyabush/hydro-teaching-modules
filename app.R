@@ -144,8 +144,8 @@ ui <- page_navbar(
           "Color sites by:",
           choices = c(
             "Climate Zone" = "Name",
-            "fSnow (%)" = "snow_fraction",
             "MAP (mm)" = "mean_annual_precip",
+            "fSnow (%)" = "snow_fraction",
             "Mean Snow Cover" = "mean_snow_prop_area",
             "Peak Snow Cover" = "peak_snow_prop_area",
             "RBI" = "RBI",
@@ -186,12 +186,6 @@ ui <- page_navbar(
           tags$ul(
             style = "font-size: 0.9em; line-height: 1.6; padding-left: 18px;",
             tags$li(HTML(
-              "<span style='font-weight:700;'>Richards-Baker Flashiness Index</span> (RBI): Measures how rapidly streamflow changes over time"
-            )),
-            tags$li(HTML(
-              "<span style='font-weight:700;'>Recession-curve Slope</span> (RCS): Characterizes subsurface heterogeneity&mdash;higher values indicate a more heterogeneous subsurface with sustained baseflow and longer residence times; lower values indicate more homogeneous conditions with rapid drainage and limited storage"
-            )),
-            tags$li(HTML(
               "<span style='font-weight:700;'>Climate Zone</span>: Koppen-Geiger climate classification"
             )),
             tags$li(HTML(
@@ -205,6 +199,12 @@ ui <- page_navbar(
             )),
             tags$li(HTML(
               "<span style='font-weight:700;'>Peak Snow Cover</span>: Maximum proportion of the watershed covered by snow in any single year"
+            )),
+            tags$li(HTML(
+              "<span style='font-weight:700;'>Richards-Baker Flashiness Index</span> (RBI): Measures how rapidly streamflow changes over time"
+            )),
+            tags$li(HTML(
+              "<span style='font-weight:700;'>Recession-curve Slope</span> (RCS): Characterizes subsurface heterogeneity&mdash;higher values indicate a more heterogeneous subsurface with sustained baseflow and longer residence times; lower values indicate more homogeneous conditions with rapid drainage and limited storage"
             )),
             tags$li(HTML(
               "<span style='font-weight:700;'>Land-use / Land-cover</span> (LULC): Dominant land cover type within the watershed"

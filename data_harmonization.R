@@ -407,13 +407,13 @@ fit_cq_slope <- function(df) {
     lm(log10(value) ~ log10(Q), data = df),
     error = function(e) NULL
   )
-  if (is.null(mod)) {
+  if (is.null(mod) || length(coef(mod)) < 2) {
     return(empty)
   }
   data.frame(
     n_paired_obs = nrow(df),
     cq_slope = unname(coef(mod)[2]),
-    r_squared = summary(mod)$r.squared1
+    r_squared = summary(mod)$r.squared
   )
 }
 
