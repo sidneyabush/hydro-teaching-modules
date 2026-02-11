@@ -366,7 +366,7 @@ ui <- page_navbar(
               "Mean Chloride (uM)" = "mean_Cl_uM",
               "% Cropland" = "land_cropland",
               "% Urban" = "land_urban_and_built_up_land",
-              "Mean Annual Precip (mm)" = "mean_annual_precip"
+              "MAP (mm)" = "mean_annual_precip"
             ),
             selected = "mean_Cl_uM"
           ),
@@ -1487,6 +1487,8 @@ server <- function(input, output, session) {
 
   # --- Chloride Map ---------------------------------------------------------
 
+  # --- Chloride Map ---------------------------------------------------------
+
   output$cl_map <- renderLeaflet({
     map_data <- cl_sites()
     req(nrow(map_data) > 0)
@@ -1496,7 +1498,7 @@ server <- function(input, output, session) {
       "mean_Cl_uM" = "Mean Cl (uM)",
       "land_cropland" = "% Cropland",
       "land_urban_and_built_up_land" = "% Urban",
-      "mean_annual_precip" = "Precip (mm/yr)"
+      "mean_annual_precip" = "MAP (mm)"
     )
     legend_title <- legend_labels[[color_var_name]]
 
@@ -1518,20 +1520,18 @@ server <- function(input, output, session) {
 
     if (use_log) {
       pal <- colorNumeric(
-        viridis(256),
+        pal_colors,
         domain = log10(color_vals)
       )
       fill_colors <- pal(log10(color_vals))
       legend_title <- paste0(legend_title, " (log\u2081\u2080)")
     } else {
-      # quantile breaks so outliers don't crush the range
-      breaks <- unique(quantile(
-        color_vals,
-        probs = seq(0, 1, length.out = 7),
-        na.rm = TRUE
-      ))
+      # ---- pretty breaks (ONLY CHANGE HERE) --------------------------------
+      breaks <- pretty(color_vals, n = 6)
+      # ---------------------------------------------------------------------
+
       pal <- colorBin(
-        viridis(max(length(breaks) - 1, 1)),
+        pal_colors,
         domain = color_vals,
         bins = breaks
       )
@@ -1580,7 +1580,7 @@ server <- function(input, output, session) {
           values = log10(color_vals),
           title = legend_title,
           opacity = 0.7,
-          labFormat = labelFormat(transform = function(x) round(10^x, 1))
+          labFormat = labelFormat(transform = function(x) round(10^x))
         )
     } else {
       m <- m %>%
@@ -1589,7 +1589,8 @@ server <- function(input, output, session) {
           pal = pal,
           values = color_vals,
           title = legend_title,
-          opacity = 0.7
+          opacity = 0.7,
+          labFormat = labelFormat(digits = 0)
         )
     }
 
