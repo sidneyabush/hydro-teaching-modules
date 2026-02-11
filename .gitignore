@@ -9,7 +9,7 @@
 data/*.csv
 data/*.xlsx
 data/*.xls
-data/*.rds
+# data/*.rds  — rds files are the app's pre-processed data, keep them tracked
 data/*.RData
 !data/.gitkeep
 !data/README.md
