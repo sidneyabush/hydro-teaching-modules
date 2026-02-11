@@ -144,13 +144,13 @@ ui <- page_navbar(
           "Color sites by:",
           choices = c(
             "Climate Zone" = "Name",
+            "LULC" = "major_land",
             "MAP (mm)" = "mean_annual_precip",
             "fSnow (%)" = "snow_fraction",
             "Mean Snow Cover" = "mean_snow_prop_area",
             "Peak Snow Cover" = "peak_snow_prop_area",
             "RBI" = "RBI",
             "RCS" = "recession_slope",
-            "LULC" = "major_land",
             "LTER Network" = "LTER"
           ),
           selected = "Name"
@@ -189,6 +189,9 @@ ui <- page_navbar(
               "<span style='font-weight:700;'>Climate Zone</span>: Koppen-Geiger climate classification"
             )),
             tags$li(HTML(
+              "<span style='font-weight:700;'>Land-use / Land-cover</span> (LULC): Dominant land cover type within the watershed"
+            )),
+            tags$li(HTML(
               "<span style='font-weight:700;'>Mean Annual Precipitation</span> (MAP, mm): Average yearly precipitation across the watershed"
             )),
             tags$li(HTML(
@@ -204,10 +207,7 @@ ui <- page_navbar(
               "<span style='font-weight:700;'>Richards-Baker Flashiness Index</span> (RBI): Measures how rapidly streamflow changes over time"
             )),
             tags$li(HTML(
-              "<span style='font-weight:700;'>Recession-curve Slope</span> (RCS): Characterizes subsurface heterogeneity&mdash;higher values indicate a more heterogeneous subsurface with sustained baseflow and longer residence times; lower values indicate more homogeneous conditions with rapid drainage and limited storage"
-            )),
-            tags$li(HTML(
-              "<span style='font-weight:700;'>Land-use / Land-cover</span> (LULC): Dominant land cover type within the watershed"
+              "<span style='font-weight:700;'>Recession-curve Slope</span> (RCS): Characterizes subsurface heterogeneity"
             ))
           )
         )
@@ -226,7 +226,7 @@ ui <- page_navbar(
           "regime_variable",
           "Define regime by:",
           choices = c(
-            "Snow Fraction" = "snow_fraction",
+            "fSnow (%)" = "snow_fraction",
             "Mean Snow Cover" = "mean_snow_prop_area",
             "Peak Snow Cover" = "peak_snow_prop_area"
           ),
@@ -250,7 +250,6 @@ ui <- page_navbar(
           ),
           selected = c("Rain-dominated", "Snow-dominated")
         ),
-        hr(),
         p(
           "Click points on the RCS vs RBI plot to select
           2 rain-dominated and 2 snow-dominated sites.
@@ -282,31 +281,6 @@ ui <- page_navbar(
               card_header("Guide"),
               tags$div(
                 style = "font-size: 0.88em; line-height: 1.6; padding: 8px;",
-                tags$p(HTML(
-                  "<b>Richards-Baker Flashiness Index (RBI)</b>: Measures how
-                  rapidly streamflow changes over time. Higher values indicate
-                  a flashier basin that responds quickly to precipitation."
-                )),
-                tags$p(HTML(
-                  "<b>Recession-curve Slope (RCS)</b>: Characterizes subsurface
-                  heterogeneity. Higher values indicate a more heterogeneous
-                  subsurface that supports sustained baseflow, extensive storage,
-                  and longer residence times. Lower values indicate a more
-                  homogeneous subsurface with rapid drainage, limited storage,
-                  and shorter residence times."
-                )),
-                hr(),
-                tags$p(HTML(
-                  "<b>Rain-dominated</b>: Below the selected snow threshold.
-                  Precipitation falls mostly as rain; runoff responds
-                  directly to storm events."
-                )),
-                tags$p(HTML(
-                  "<b>Snow-dominated</b>: At or above the selected snow
-                  threshold. Significant snowpack buffers and delays runoff
-                  into spring melt."
-                )),
-                hr(),
                 tags$p(
                   style = "color: #444;",
                   HTML(
@@ -337,9 +311,8 @@ ui <- page_navbar(
                 style = "font-size: 0.88em; line-height: 1.6; padding: 8px;",
                 tags$p(
                   "Select two hydrographs from rain-dominated areas
-                  (fSnow < 25%) and two from snow-dominated areas
-                  (fSnow > 25%). Compare the flashiness and recession
-                  behavior of all four."
+                  and two from snow-dominated areas. Compare the
+                  flashiness and recession behavior of all four."
                 ),
                 hr(),
                 tags$p(
@@ -510,11 +483,6 @@ ui <- page_navbar(
         # time series controls
         conditionalPanel(
           condition = "input.activity3_tab == 'Site Time Series'",
-          p(
-            "Start by examining the hydrograph and concentration patterns
-            for a single site before plotting C vs Q.",
-            style = "font-size: 0.85em; color: #666;"
-          ),
           selectInput(
             "cq_ts_site",
             "Select a site:",
@@ -524,7 +492,7 @@ ui <- page_navbar(
             "cq_ts_solutes",
             "Overlay concentration:",
             choices = c("Chloride (Cl)" = "Cl", "Nitrate (NO3)" = "NO3"),
-            selected = "Cl"
+            selected = character(0)
           )
         ),
 
@@ -646,13 +614,13 @@ ui <- page_navbar(
                 tags$p(HTML("<b>Interpreting C-Q slopes:</b>")),
                 tags$ul(
                   tags$li(HTML(
-                    "<b>Positive slope</b> = enrichment (concentration rises with flow)"
+                    "<b>Slope > 0.1</b> = enrichment (concentration rises with flow)"
                   )),
                   tags$li(HTML(
-                    "<b>Slope near 0</b> = chemostatic (concentration stable)"
+                    "<b>Slope between &plusmn;0.1</b> = chemostatic (concentration stable)"
                   )),
                   tags$li(HTML(
-                    "<b>Negative slope</b> = dilution (concentration falls with flow)"
+                    "<b>Slope < &minus;0.1</b> = dilution (concentration falls with flow)"
                   ))
                 ),
                 hr(),
@@ -2167,7 +2135,7 @@ server <- function(input, output, session) {
             text = "Chemostatic",
             showarrow = FALSE,
             xanchor = "center",
-            font = list(size = 11, color = "#999")
+            font = list(size = 8, color = "#999")
           ),
           list(
             x = 0.1,
