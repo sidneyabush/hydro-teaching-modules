@@ -6,11 +6,13 @@
 # Update data_path below to point at your local data directory.
 
 suppressPackageStartupMessages({
-  if (!require("librarian")) {
-    options(repos = c(CRAN = "https://cloud.r-project.org"))
-    install.packages("librarian")
-  }
-  librarian::shelf(shiny, bslib, dplyr, ggplot2, leaflet, plotly, viridis)
+  library(shiny)
+  library(bslib)
+  library(dplyr)
+  library(ggplot2)
+  library(leaflet)
+  library(plotly)
+  library(viridis)
 })
 
 data_path <- "data"
@@ -1743,10 +1745,12 @@ server <- function(input, output, session) {
     "Nitrate (NO3)" = "NO3"
   )
 
-  # populate site dropdown — only sites that have C-Q slopes
+  # populate site dropdown — only sites that have C-Q slopes AND discharge data
   observe({
+    has_q <- unique(discharge_data()$Stream_ID)
     slopes <- cq_slopes_data()
     sites <- slopes %>%
+      filter(Stream_ID %in% has_q) %>%
       select(Stream_ID, LTER, Stream_Name) %>%
       distinct() %>%
       arrange(LTER, Stream_Name)
@@ -1987,19 +1991,25 @@ server <- function(input, output, session) {
             showlegend = FALSE
           )
 
-        # place b and R² at the right end of the trendline, stacked vertically
+        # stack annotations in top-left corner so they don't overlap data
+        ann_index <- length(cq_annotations)
         cq_annotations <- c(
           cq_annotations,
           list(
             list(
-              x = x_range[2],
-              y = tail(y_seq, 1),
-              text = paste0("b = ", slope, "<br>R\u00b2 = ", r2),
+              x = 0.01,
+              y = 1 - ann_index * 0.12,
+              xref = "paper",
+              yref = "paper",
+              text = paste0(trace_name, ":  b = ", slope, "  R\u00b2 = ", r2),
               showarrow = FALSE,
               xanchor = "left",
-              yanchor = "middle",
+              yanchor = "top",
               font = list(color = clr, size = 11),
-              xshift = 6
+              bgcolor = "rgba(255,255,255,0.8)",
+              bordercolor = "rgba(200,200,200,0.5)",
+              borderwidth = 1,
+              borderpad = 4
             )
           )
         )
