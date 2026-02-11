@@ -53,7 +53,7 @@ north_american_lter <- c(
 # --- Load and filter raw data ---------------------------------------------
 
 chem_na <- read.csv(
-  file.path(data_path, "20260105_masterdata_chem.csv"),
+  file.path(data_path, "raw_inputs/20260105_masterdata_chem.csv"),
   stringsAsFactors = FALSE
 ) %>%
   filter(LTER %in% north_american_lter) %>%
@@ -69,7 +69,7 @@ chem_na <- read.csv(
   )
 
 discharge_na <- read.csv(
-  file.path(data_path, "20260106_masterdata_discharge.csv"),
+  file.path(data_path, "raw_inputs/20260106_masterdata_discharge.csv"),
   stringsAsFactors = FALSE
 ) %>%
   filter(LTER %in% north_american_lter) %>%
@@ -152,20 +152,14 @@ sites_with_discharge <- sites_info %>%
   left_join(discharge_metrics, by = c("Stream_ID", "LTER", "Stream_Name"))
 
 kg_data <- read.csv(
-  file.path(
-    data_path,
-    "Driver_Variables/Data Release 2/Data Harmonization/Additional files needed/Koeppen_Geiger_2.csv"
-  ),
+  file.path(data_path, "raw_inputs/Koeppen_Geiger_2.csv"),
   stringsAsFactors = FALSE
 ) %>%
   create_stream_id() %>%
   select(Stream_ID, ClimateZ, Latitude, Longitude, Name)
 
 spatial_drivers_raw <- read.csv(
-  file.path(
-    data_path,
-    "Driver_Variables/Data Release 2/all-data_si-extract_2_20250325.csv"
-  ),
+  file.path(data_path, "raw_inputs/all-data_si-extract_2_20250325.csv"),
   stringsAsFactors = FALSE
 ) %>%
   create_stream_id()
@@ -229,7 +223,7 @@ snow_precip_data <- spatial_drivers_raw %>%
   )
 
 lulc_data <- read.csv(
-  file.path(data_path, "DSi_LULC_filled_interpolated_Simple.csv"),
+  file.path(data_path, "raw_inputs/DSi_LULC_filled_interpolated_Simple.csv"),
   stringsAsFactors = FALSE
 ) %>%
   filter(Year >= 2002, Year <= 2022) %>%
