@@ -146,6 +146,8 @@ ui <- page_navbar(
             "Climate Zone" = "Name",
             "fSnow (%)" = "snow_fraction",
             "MAP (mm)" = "mean_annual_precip",
+            "Mean Snow Cover" = "mean_snow_prop_area",
+            "Peak Snow Cover" = "peak_snow_prop_area",
             "RBI" = "RBI",
             "RCS" = "recession_slope",
             "LULC" = "major_land",
@@ -187,7 +189,7 @@ ui <- page_navbar(
               "<span style='font-weight:700;'>Richards-Baker Flashiness Index</span> (RBI): Measures how rapidly streamflow changes over time"
             )),
             tags$li(HTML(
-              "<span style='font-weight:700;'>Recession-Curve Slope</span> (RCS): Characterizes subsurface heterogeneity&mdash;higher values indicate a more heterogeneous subsurface with sustained baseflow and longer residence times; lower values indicate more homogeneous conditions with rapid drainage and limited storage"
+              "<span style='font-weight:700;'>Recession-curve Slope</span> (RCS): Characterizes subsurface heterogeneity&mdash;higher values indicate a more heterogeneous subsurface with sustained baseflow and longer residence times; lower values indicate more homogeneous conditions with rapid drainage and limited storage"
             )),
             tags$li(HTML(
               "<span style='font-weight:700;'>Climate Zone</span>: Koppen-Geiger climate classification"
@@ -197,6 +199,12 @@ ui <- page_navbar(
             )),
             tags$li(HTML(
               "<span style='font-weight:700;'>Snow Fraction</span> (fSnow, %): Fraction of the year with snow cover (snow days &divide; 365)"
+            )),
+            tags$li(HTML(
+              "<span style='font-weight:700;'>Mean Snow Cover</span>: Average proportion of the watershed covered by snow at annual peak"
+            )),
+            tags$li(HTML(
+              "<span style='font-weight:700;'>Peak Snow Cover</span>: Maximum proportion of the watershed covered by snow in any single year"
             )),
             tags$li(HTML(
               "<span style='font-weight:700;'>Land-use / Land-cover</span> (LULC): Dominant land cover type within the watershed"
@@ -214,6 +222,21 @@ ui <- page_navbar(
         width = 300,
         h4("Controls"),
 
+        selectInput(
+          "regime_variable",
+          "Define regime by:",
+          choices = c(
+            "Snow Fraction" = "snow_fraction",
+            "Mean Snow Cover" = "mean_snow_prop_area",
+            "Peak Snow Cover" = "peak_snow_prop_area"
+          ),
+          selected = "snow_fraction"
+        ),
+        sliderInput(
+          "regime_threshold",
+          "Snow-dominated threshold:",
+          min = 0, max = 1, value = 0.25, step = 0.05
+        ),
         p(
           "Show or hide precipitation regime categories:",
           style = "font-size: 0.85em; color: #666;"
@@ -265,7 +288,7 @@ ui <- page_navbar(
                   a flashier basin that responds quickly to precipitation."
                 )),
                 tags$p(HTML(
-                  "<b>Recession-Curve Slope (RCS)</b>: Characterizes subsurface
+                  "<b>Recession-curve Slope (RCS)</b>: Characterizes subsurface
                   heterogeneity. Higher values indicate a more heterogeneous
                   subsurface that supports sustained baseflow, extensive storage,
                   and longer residence times. Lower values indicate a more
@@ -274,12 +297,14 @@ ui <- page_navbar(
                 )),
                 hr(),
                 tags$p(HTML(
-                  "<b>Rain-dominated</b> (fSnow < 25%): Precipitation falls
-                  mostly as rain; runoff responds directly to storm events."
+                  "<b>Rain-dominated</b>: Below the selected snow threshold.
+                  Precipitation falls mostly as rain; runoff responds
+                  directly to storm events."
                 )),
                 tags$p(HTML(
-                  "<b>Snow-dominated</b> (fSnow &ge; 25%): Significant
-                  snowpack buffers and delays runoff into spring melt."
+                  "<b>Snow-dominated</b>: At or above the selected snow
+                  threshold. Significant snowpack buffers and delays runoff
+                  into spring melt."
                 )),
                 hr(),
                 tags$p(
@@ -363,12 +388,12 @@ ui <- page_navbar(
             "cl_map_color",
             "Color markers by:",
             choices = c(
-              "Mean Chloride (uM)" = "mean_Cl_uM",
+              "Mean Chloride (mg/L)" = "mean_Cl_mgL",
               "% Cropland" = "land_cropland",
               "% Urban" = "land_urban_and_built_up_land",
               "MAP (mm)" = "mean_annual_precip"
             ),
-            selected = "mean_Cl_uM"
+            selected = "mean_Cl_mgL"
           ),
           checkboxInput(
             "cl_log_scale",
@@ -735,8 +760,7 @@ server <- function(input, output, session) {
       filter(
         !is.na(RBI),
         !is.na(recession_slope),
-        !is.na(mean_snow_days),
-        !is.na(snow_fraction)
+        !is.na(.data[[input$regime_variable]])
       ) %>%
       mutate(
         snow_cat = case_when(
@@ -753,7 +777,7 @@ server <- function(input, output, session) {
           )
         ),
         precip_regime = if_else(
-          snow_fraction < 0.25,
+          .data[[input$regime_variable]] < input$regime_threshold,
           "Rain-dominated",
           "Snow-dominated"
         ),
@@ -899,6 +923,8 @@ server <- function(input, output, session) {
       "Name" = "Climate Zone",
       "snow_fraction" = "fSnow (%)",
       "mean_annual_precip" = "MAP (mm)",
+      "mean_snow_prop_area" = "Mean Snow Cover",
+      "peak_snow_prop_area" = "Peak Snow Cover",
       "RBI" = "RBI",
       "recession_slope" = "RCS",
       "major_land" = "LULC",
@@ -943,12 +969,20 @@ server <- function(input, output, session) {
         RColorBrewer::brewer.pal(9, "PuBu"),
         domain = color_var
       ),
+      "mean_snow_prop_area" = colorNumeric(
+        RColorBrewer::brewer.pal(9, "BuGn"),
+        domain = color_var
+      ),
+      "peak_snow_prop_area" = colorNumeric(
+        RColorBrewer::brewer.pal(9, "YlGnBu"),
+        domain = color_var
+      ),
       "RBI" = colorNumeric(
         RColorBrewer::brewer.pal(9, "YlOrRd"),
         domain = color_var
       ),
       "recession_slope" = colorNumeric(
-        RColorBrewer::brewer.pal(9, "Oranges"),
+        RColorBrewer::brewer.pal(9, "Purples"),
         domain = color_var
       ),
 
@@ -1013,6 +1047,12 @@ server <- function(input, output, session) {
           "Snow Fraction: ",
           round(snow_fraction * 100, 0),
           "%<br>",
+          "Mean Snow Cover: ",
+          round(mean_snow_prop_area, 2),
+          "<br>",
+          "Peak Snow Cover: ",
+          round(peak_snow_prop_area, 2),
+          "<br>",
           "Mean Annual Precip: ",
           round(mean_annual_precip, 1),
           " mm"
@@ -1292,11 +1332,11 @@ server <- function(input, output, session) {
       )
     }
 
-    # pad axes so labels don't get clipped
+    # pad axes generously so labels don't get clipped
     rbi_vals <- site_meta$RBI
     rcs_vals <- site_meta$recession_slope
-    rbi_pad <- diff(range(rbi_vals)) * 0.25
-    rcs_pad <- diff(range(rcs_vals)) * 0.25
+    rbi_pad <- diff(range(rbi_vals)) * 0.4
+    rcs_pad <- diff(range(rcs_vals)) * 0.4
 
     p %>%
       layout(
@@ -1359,6 +1399,12 @@ server <- function(input, output, session) {
       "%<br>",
       "Snow Days/Year: ",
       round(plot_data$mean_snow_days, 0),
+      "<br>",
+      "Mean Snow Cover: ",
+      round(plot_data$mean_snow_prop_area, 2),
+      "<br>",
+      "Peak Snow Cover: ",
+      round(plot_data$peak_snow_prop_area, 2),
       "<br>",
       "RBI: ",
       round(plot_data$RBI, 3),
@@ -1456,7 +1502,7 @@ server <- function(input, output, session) {
   # sites from harmonized partial that have Cl data
   cl_sites <- reactive({
     harmonized_partial() %>%
-      filter(!is.na(mean_Cl_uM), !is.na(Latitude), !is.na(Longitude))
+      filter(!is.na(mean_Cl_mgL), !is.na(Latitude), !is.na(Longitude))
   })
 
   cl_monthly <- reactive({
@@ -1495,7 +1541,7 @@ server <- function(input, output, session) {
 
     color_var_name <- input$cl_map_color
     legend_labels <- c(
-      "mean_Cl_uM" = "Mean Cl (uM)",
+      "mean_Cl_mgL" = "Mean Cl (mg/L)",
       "land_cropland" = "% Cropland",
       "land_urban_and_built_up_land" = "% Urban",
       "mean_annual_precip" = "MAP (mm)"
@@ -1504,7 +1550,7 @@ server <- function(input, output, session) {
 
     # ---- palette mapping ---------------------------------------------------
     palette_map <- list(
-      "mean_Cl_uM" = viridis::viridis(256),
+      "mean_Cl_mgL" = viridis::viridis(256),
       "land_cropland" = RColorBrewer::brewer.pal(9, "YlGn"),
       "land_urban_and_built_up_land" = RColorBrewer::brewer.pal(9, "OrRd"),
       "mean_annual_precip" = RColorBrewer::brewer.pal(9, "Blues")
@@ -1557,8 +1603,8 @@ server <- function(input, output, session) {
           LTER,
           "<br>",
           "Mean Cl: ",
-          round(mean_Cl_uM, 1),
-          " uM<br>",
+          round(mean_Cl_mgL, 1),
+          " mg/L<br>",
           "% Cropland: ",
           round(land_cropland, 1),
           "<br>",
@@ -1642,15 +1688,15 @@ server <- function(input, output, session) {
       add_trace(
         data = cl_data,
         x = ~month,
-        y = ~mean_Cl_uM,
+        y = ~mean_Cl_mgL,
         type = "scatter",
         mode = "lines+markers",
-        name = "Mean Cl (uM)",
+        name = "Mean Cl (mg/L)",
         line = list(color = "#6b9bd1", width = 3),
         marker = list(color = "#6b9bd1", size = 8),
         hovertemplate = paste0(
           "Month: %{x}<br>",
-          "Mean Cl: %{y:.1f} uM<br>",
+          "Mean Cl: %{y:.1f} mg/L<br>",
           "<extra></extra>"
         )
       )
@@ -1712,7 +1758,7 @@ server <- function(input, output, session) {
         ),
         yaxis = list(
           title = list(
-            text = "Mean Chloride (uM)",
+            text = "Mean Chloride (mg/L)",
             font = list(color = "#6b9bd1")
           ),
           gridcolor = "#d4e3f0",
