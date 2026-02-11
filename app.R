@@ -1,4 +1,4 @@
-# River Hydrology Teaching Module
+# Stream Hydrology Teaching Module
 #
 # Interactive app for exploring hydrology metrics (RBI, recession slope)
 # across North American LTER and USGS sites. Built for CUAHSI workshops.
@@ -53,7 +53,7 @@ discharge_global <- data.table::fread(
 # --- UI -------------------------------------------------------------------
 
 ui <- page_navbar(
-  title = "River Hydrology Teaching Module",
+  title = "Stream Hydrology Teaching Module",
   theme = bs_theme(
     base_font = font_google("Work Sans", wght = "400..700"),
     bg = "#fefcfb",
@@ -144,7 +144,7 @@ ui <- page_navbar(
           "Color sites by:",
           choices = c(
             "Climate Zone" = "Name",
-            "Snow Fraction" = "snow_fraction",
+            "fSnow (%)" = "snow_fraction",
             "MAP (mm)" = "mean_annual_precip",
             "RBI" = "RBI",
             "RCS" = "recession_slope",
@@ -180,10 +180,10 @@ ui <- page_navbar(
           tags$ul(
             style = "font-size: 0.9em; line-height: 1.6; padding-left: 18px;",
             tags$li(HTML("<span style='font-weight:700;'>Richards-Baker Flashiness Index</span> (RBI): Measures how rapidly streamflow changes over time")),
-            tags$li(HTML("<span style='font-weight:700;'>Recession Curve Slope</span> (RCS): Describes how quickly discharge decreases after peak flow")),
+            tags$li(HTML("<span style='font-weight:700;'>Recession-Curve Slope</span> (RCS): Characterizes subsurface heterogeneity&mdash;higher values indicate a more heterogeneous subsurface with sustained baseflow and longer residence times; lower values indicate more homogeneous conditions with rapid drainage and limited storage")),
             tags$li(HTML("<span style='font-weight:700;'>Climate Zone</span>: Koppen-Geiger climate classification")),
             tags$li(HTML("<span style='font-weight:700;'>Mean Annual Precipitation</span> (MAP, mm): Average yearly precipitation across the watershed")),
-            tags$li(HTML("<span style='font-weight:700;'>Snow Fraction</span>: Proportion of the year with snow cover")),
+            tags$li(HTML("<span style='font-weight:700;'>Snow Fraction</span> (fSnow, %): Fraction of the year with snow cover (snow days &divide; 365)")),
             tags$li(HTML("<span style='font-weight:700;'>Land-use / Land-cover</span> (LULC): Dominant land cover type within the watershed"))
           )
         )
@@ -198,66 +198,31 @@ ui <- page_navbar(
         width = 300,
         h4("Controls"),
 
-        # --- scatter controls ---
-        conditionalPanel(
-          condition = "input.activity1_tab == 'RCS vs RBI'",
-          p(
-            "Show or hide precipitation regime categories:",
-            style = "font-size: 0.85em; color: #666;"
-          ),
-          checkboxGroupInput(
-            "show_regime_categories",
-            "Display:",
-            choices = c(
-              "Rain-dominated" = "Rain-dominated",
-              "Snow-dominated" = "Snow-dominated"
-            ),
-            selected = c("Rain-dominated", "Snow-dominated")
-          ),
-          hr(),
-          h4("Highlight Sites"),
-          p(
-            "Pick sites to label on the plot:",
-            style = "font-size: 0.85em; color: #666;"
-          ),
-          selectInput(
-            "highlight_rain",
-            "Rain-dominated (fSnow < 25%):",
-            choices = NULL,
-            multiple = TRUE
-          ),
-          selectInput(
-            "highlight_snow_dom",
-            HTML("Snow-dominated (fSnow &ge; 25%):"),
-            choices = NULL,
-            multiple = TRUE
-          )
+        p(
+          "Show or hide precipitation regime categories:",
+          style = "font-size: 0.85em; color: #666;"
         ),
-
-        # --- hydrograph controls ---
-        conditionalPanel(
-          condition = "input.activity1_tab == 'Hydrographs'",
-          p(
-            "Select at least 2 sites from different regimes, then click Plot.",
-            style = "font-size: 0.85em; color: #666;"
+        checkboxGroupInput(
+          "show_regime_categories",
+          "Display:",
+          choices = c(
+            "Rain-dominated" = "Rain-dominated",
+            "Snow-dominated" = "Snow-dominated"
           ),
-          selectInput(
-            "rain_dom_sites",
-            "Rain-dominated (fSnow < 25%):",
-            choices = NULL,
-            multiple = TRUE
-          ),
-          selectInput(
-            "snow_dom_sites",
-            HTML("Snow-dominated (fSnow &ge; 25%):"),
-            choices = NULL,
-            multiple = TRUE
-          ),
-          actionButton(
-            "plot_hydrographs",
-            "Plot Hydrographs",
-            class = "btn-primary mt-2 w-100"
-          )
+          selected = c("Rain-dominated", "Snow-dominated")
+        ),
+        hr(),
+        p(
+          "Click points on the RCS vs RBI plot to select
+          2 rain-dominated and 2 snow-dominated sites.
+          Selections carry over to the Hydrographs tab.",
+          style = "font-size: 0.85em; color: #666;"
+        ),
+        uiOutput("selected_sites_display"),
+        actionButton(
+          "clear_sites",
+          "Clear selections",
+          class = "btn-outline-secondary btn-sm mt-2 w-100"
         )
       ),
 
@@ -270,9 +235,9 @@ ui <- page_navbar(
             card(
               full_screen = TRUE,
               card_header(
-                "How does precipitation regime influence flashiness and recession?"
+                "How does precipitation regime influence flashiness and recession-curve slope?"
               ),
-              plotlyOutput("rcs_rbi_plot", height = 600)
+              plotlyOutput("rcs_rbi_plot", height = 700)
             ),
             card(
               card_header("Guide"),
@@ -284,9 +249,12 @@ ui <- page_navbar(
                   a flashier basin that responds quickly to precipitation."
                 )),
                 tags$p(HTML(
-                  "<b>Recession Curve Slope (RCS)</b>: Describes how quickly
-                  discharge decreases after peak flow. Higher values indicate
-                  faster drainage and less subsurface storage."
+                  "<b>Recession-Curve Slope (RCS)</b>: Characterizes subsurface
+                  heterogeneity. Higher values indicate a more heterogeneous
+                  subsurface that supports sustained baseflow, extensive storage,
+                  and longer residence times. Lower values indicate a more
+                  homogeneous subsurface with rapid drainage, limited storage,
+                  and shorter residence times."
                 )),
                 hr(),
                 tags$p(HTML(
@@ -303,19 +271,11 @@ ui <- page_navbar(
                   HTML(
                     "<b>What to look for:</b> You should see an inverse
                     relationship between RCS and RBI. Why might flashier
-                    basins have lower recession curve slopes? What does this
-                    tell you about subsurface storage and streamflow
+                    basins have lower recession-curve slopes? What does this
+                    tell you about subsurface heterogeneity and streamflow
                     generation?"
                   )
                 ),
-                hr(),
-                tags$p(
-                  style = "font-size: 0.85em; color: #888;",
-                  HTML(
-                    "<em>fSnow = fraction of the year with snow cover
-                    (snow days &divide; 365).</em>"
-                  )
-                )
               )
             )
           )
@@ -327,7 +287,8 @@ ui <- page_navbar(
             card(
               full_screen = TRUE,
               card_header("Compare Discharge Patterns"),
-              plotlyOutput("hydrograph_plot", height = 600)
+              plotlyOutput("hydrograph_grid", height = 900),
+              plotlyOutput("selected_rcs_rbi", height = 700)
             ),
             card(
               card_header("Reading Hydrographs"),
@@ -359,6 +320,15 @@ ui <- page_navbar(
                     between precipitation type and flashiness? Between
                     precipitation type and recession behavior? What hypotheses
                     can you form about why you see these patterns?"
+                  )
+                ),
+                hr(),
+                tags$p(
+                  style = "color: #444;",
+                  HTML(
+                    "<b>Below the hydrographs:</b> The RCS vs RBI scatter
+                    shows where your four selected sites fall relative to
+                    each other. Colors match the hydrographs above."
                   )
                 )
               )
@@ -550,7 +520,7 @@ ui <- page_navbar(
         conditionalPanel(
           condition = "input.activity3_tab == 'C-Q Relationships'",
           p(
-            "Select up to 3 sites and 2 solutes to compare.",
+            "Select up to 3 sites and check the solutes to compare.",
             style = "font-size: 0.85em; color: #666;"
           ),
           selectInput(
@@ -559,11 +529,11 @@ ui <- page_navbar(
             choices = NULL,
             multiple = TRUE
           ),
-          selectInput(
+          checkboxGroupInput(
             "cq_solutes",
-            "Solutes (max 2):",
-            choices = NULL,
-            multiple = TRUE
+            "Solutes:",
+            choices = c("Chloride (Cl)" = "Cl", "Nitrate (NO3)" = "NO3"),
+            selected = character(0)
           ),
           checkboxInput(
             "cq_show_trendline",
@@ -822,26 +792,67 @@ server <- function(input, output, session) {
     updateCheckboxGroupInput(session, "map_lter", selected = character(0))
   })
 
-  # populate the per-regime site dropdowns in Activity 1
-  observe({
-    site_data <- harmonized_with_categories()
+  # track selected sites via click on RCS vs RBI plot
+  selected_rain <- reactiveVal(character(0))
+  selected_snow <- reactiveVal(character(0))
 
-    make_choices <- function(df) {
-      df <- df %>% arrange(Stream_Name)
-      setNames(
-        df$Stream_ID,
-        paste0(df$Stream_Name, " [", df$LTER, ", ",
-               round(df$snow_fraction * 100, 0), "% snow]")
-      )
+  observeEvent(event_data("plotly_click", source = "rcs_rbi"), {
+    click <- event_data("plotly_click", source = "rcs_rbi")
+    if (is.null(click)) return()
+
+    site_id <- click$key
+    if (is.null(site_id) || site_id == "") return()
+
+    site_data <- harmonized_with_categories()
+    regime <- site_data$precip_regime[site_data$Stream_ID == site_id][1]
+
+    if (regime == "Rain-dominated") {
+      current <- selected_rain()
+      if (site_id %in% current) {
+        selected_rain(setdiff(current, site_id))
+      } else if (length(current) < 2) {
+        selected_rain(c(current, site_id))
+      }
+    } else {
+      current <- selected_snow()
+      if (site_id %in% current) {
+        selected_snow(setdiff(current, site_id))
+      } else if (length(current) < 2) {
+        selected_snow(c(current, site_id))
+      }
+    }
+  })
+
+  observeEvent(input$clear_sites, {
+    selected_rain(character(0))
+    selected_snow(character(0))
+  })
+
+  # show selected sites in sidebar
+  output$selected_sites_display <- renderUI({
+    site_data <- harmonized_with_categories()
+    rain_ids <- selected_rain()
+    snow_ids <- selected_snow()
+
+    make_label <- function(ids) {
+      if (length(ids) == 0) return(tags$em("None", style = "color: #999;"))
+      names <- site_data$Stream_Name[match(ids, site_data$Stream_ID)]
+      tags$span(paste(names, collapse = ", "))
     }
 
-    rain_choices <- make_choices(filter(site_data, precip_regime == "Rain-dominated"))
-    snow_dom_choices <- make_choices(filter(site_data, precip_regime == "Snow-dominated"))
-
-    updateSelectInput(session, "rain_dom_sites", choices = rain_choices)
-    updateSelectInput(session, "snow_dom_sites", choices = snow_dom_choices)
-    updateSelectInput(session, "highlight_rain", choices = rain_choices)
-    updateSelectInput(session, "highlight_snow_dom", choices = snow_dom_choices)
+    tags$div(
+      style = "font-size: 0.85em; line-height: 1.6;",
+      tags$div(
+        tags$strong("Rain-dominated: ", style = "color: #d67e7e;"),
+        make_label(rain_ids),
+        paste0(" (", length(rain_ids), "/2)")
+      ),
+      tags$div(
+        tags$strong("Snow-dominated: ", style = "color: #6b9bd1;"),
+        make_label(snow_ids),
+        paste0(" (", length(snow_ids), "/2)")
+      )
+    )
   })
 
   # --- Map -----------------------------------------------------------------
@@ -885,10 +896,14 @@ server <- function(input, output, session) {
     }
 
     color_var <- map_data[[input$map_color_by]]
+    # show snow fraction as percentage
+    if (input$map_color_by == "snow_fraction") {
+      color_var <- color_var * 100
+    }
 
     legend_titles <- c(
       "Name" = "Climate Zone",
-      "snow_fraction" = "Snow Fraction",
+      "snow_fraction" = "fSnow (%)",
       "mean_annual_precip" = "MAP (mm)",
       "RBI" = "RBI",
       "recession_slope" = "RCS",
@@ -937,7 +952,7 @@ server <- function(input, output, session) {
           Name,
           "<br>",
           "Snow Fraction: ",
-          round(snow_fraction, 3),
+          round(snow_fraction * 100, 0), "%",
           "<br>",
           "Mean Annual Precip: ",
           round(mean_annual_precip, 1),
@@ -956,8 +971,9 @@ server <- function(input, output, session) {
 
   # --- Hydrograph ----------------------------------------------------------
 
-  hydrograph_data <- eventReactive(input$plot_hydrographs, {
-    all_selected <- c(input$rain_dom_sites, input$snow_dom_sites)
+  # hydrograph data reacts to the shared site selections
+  hydrograph_data <- reactive({
+    all_selected <- c(selected_rain(), selected_snow())
 
     if (length(all_selected) < 2) return(NULL)
 
@@ -979,7 +995,24 @@ server <- function(input, output, session) {
       )
   })
 
-  output$hydrograph_plot <- renderPlotly({
+  # 4 distinct colors: dark for rain, light for snow
+  hydro_site_colors <- c("#e88e8e", "#b03a3a", "#8ec5e8", "#2d6da3")
+
+  # build the shared color map for both plots
+  hydro_color_map <- reactive({
+    req(hydrograph_data())
+    site_data <- hydrograph_data()
+    sites <- site_data %>%
+      select(Stream_ID, site_label, precip_regime) %>%
+      distinct()
+    rain <- filter(sites, precip_regime == "Rain-dominated")
+    snow <- filter(sites, precip_regime == "Snow-dominated")
+    ordered <- bind_rows(rain, snow)
+    setNames(hydro_site_colors[seq_len(nrow(ordered))], ordered$Stream_ID)
+  })
+
+  # --- 2x2 hydrograph grid ---
+  output$hydrograph_grid <- renderPlotly({
     plot_data <- hydrograph_data()
 
     if (is.null(plot_data) || nrow(plot_data) == 0) {
@@ -987,34 +1020,176 @@ server <- function(input, output, session) {
         plotly_empty() %>%
           layout(
             title = list(
-              text = "Select at least 2 sites and click 'Plot Hydrographs'",
+              text = "Click sites on the RCS vs RBI plot to select 2 rain + 2 snow sites",
               font = list(color = "#666", size = 14)
             )
           )
       )
     }
 
-    p <- ggplot(
-      plot_data,
-      aes(x = Date, y = Qcms, color = site_label, group = site_label)
-    ) +
-      geom_line(linewidth = 0.7, alpha = 0.8) +
-      labs(x = "Date", y = "Discharge (cms)", color = "Site") +
-      base_plot_theme +
-      theme(legend.position = "bottom")
+    colors <- hydro_color_map()
+    site_meta <- plot_data %>%
+      select(Stream_ID, Stream_Name, LTER, site_label, precip_regime, RBI, recession_slope) %>%
+      distinct()
 
-    ggplotly(p) %>%
+    rain_ids <- filter(site_meta, precip_regime == "Rain-dominated")$Stream_ID
+    snow_ids <- filter(site_meta, precip_regime == "Snow-dominated")$Stream_ID
+    # top row = rain, bottom row = snow
+    grid_order <- c(rain_ids, snow_ids)
+
+    plots <- list()
+    for (i in seq_along(grid_order)) {
+      sid <- grid_order[i]
+      d <- filter(plot_data, Stream_ID == sid)
+      meta <- filter(site_meta, Stream_ID == sid)
+      clr <- colors[[sid]]
+
+      panel_title <- paste0(meta$LTER[1], " - ", meta$Stream_Name[1])
+
+      # top row (1,2): no x-axis title; bottom row (3,4): "Date"
+      # left col (1,3): "Q (cms)"; right col (2,4): no y-axis title
+      x_title <- FALSE
+      y_title <- FALSE
+
+      plots[[i]] <- plot_ly(
+        data = d, x = ~Date, y = ~Qcms,
+        type = "scatter", mode = "lines",
+        line = list(color = clr, width = 1.2),
+        hovertemplate = "Date: %{x}<br>Q: %{y:.4f} cms<extra></extra>",
+        showlegend = FALSE
+      ) %>%
+        layout(
+          xaxis = list(title = list(text = x_title, font = list(size = 10)),
+                       tickfont = list(size = 9)),
+          yaxis = list(title = list(text = y_title, font = list(size = 10)),
+                       tickfont = list(size = 9)),
+          annotations = list(list(
+            text = paste0("<b>", panel_title, "</b>"),
+            xref = "paper", yref = "paper",
+            x = 0.5, y = 1.1, showarrow = FALSE,
+            font = list(size = 10, color = clr),
+            xanchor = "center"
+          ))
+        )
+    }
+
+    # pad to 4 if fewer selected
+    while (length(plots) < 4) {
+      plots[[length(plots) + 1]] <- plotly_empty()
+    }
+
+    subplot(
+      plots[[1]], plots[[2]],
+      plots[[3]], plots[[4]],
+      nrows = 2, shareX = FALSE, shareY = FALSE,
+      titleY = TRUE, titleX = TRUE,
+      margin = c(0.03, 0.03, 0.06, 0.06)
+    ) %>%
       layout(
         paper_bgcolor = plotly_bg$paper_bgcolor,
         plot_bgcolor = plotly_bg$plot_bgcolor,
-        legend = list(orientation = "h", y = -0.2)
+        margin = list(t = 30, b = 10, l = 60, r = 80),
+        annotations = list(
+          list(
+            text = "Q (cms)",
+            xref = "paper", yref = "paper",
+            x = -0.04, y = 0.5,
+            showarrow = FALSE, textangle = -90,
+            font = list(size = 10, color = "#2d2926"),
+            xanchor = "middle", yanchor = "middle"
+          ),
+          list(
+            text = "<b>Rain-dominated</b>",
+            xref = "paper", yref = "paper",
+            x = 1.03, y = 0.76,
+            showarrow = FALSE, textangle = 90,
+            font = list(size = 10, color = "#b03a3a"),
+            xanchor = "left", yanchor = "middle"
+          ),
+          list(
+            text = "<b>Snow-dominated</b>",
+            xref = "paper", yref = "paper",
+            x = 1.03, y = 0.24,
+            showarrow = FALSE, textangle = 90,
+            font = list(size = 10, color = "#2d6da3"),
+            xanchor = "left", yanchor = "middle"
+          )
+        )
+      )
+  })
+
+  # --- RCS vs RBI for the 4 selected sites ---
+  output$selected_rcs_rbi <- renderPlotly({
+    plot_data <- hydrograph_data()
+
+    if (is.null(plot_data) || nrow(plot_data) == 0) {
+      return(plotly_empty())
+    }
+
+    colors <- hydro_color_map()
+    site_meta <- plot_data %>%
+      select(Stream_ID, Stream_Name, LTER, precip_regime,
+             RBI, recession_slope, snow_fraction) %>%
+      distinct()
+
+    p <- plot_ly()
+    label_annotations <- list()
+    for (i in seq_len(nrow(site_meta))) {
+      row <- site_meta[i, ]
+      clr <- colors[[row$Stream_ID]]
+      site_label <- paste0(row$LTER, " - ", row$Stream_Name)
+      p <- p %>%
+        add_trace(
+          x = row$RBI, y = row$recession_slope,
+          type = "scatter", mode = "markers",
+          marker = list(color = clr, size = 12,
+                        line = list(color = "#2d2926", width = 1)),
+          name = paste0(site_label, " (", row$precip_regime, ")"),
+          hovertemplate = paste0(
+            "<b>", site_label, "</b><br>",
+            row$precip_regime, "<br>",
+            "RBI: ", round(row$RBI, 3), "<br>",
+            "RCS: ", round(row$recession_slope, 3),
+            "<extra></extra>"
+          )
+        )
+      label_annotations[[i]] <- list(
+        x = row$RBI, y = row$recession_slope,
+        text = paste0("<b>", site_label, "</b>"),
+        showarrow = FALSE,
+        xshift = 12, yshift = 10,
+        font = list(size = 10, color = clr),
+        xanchor = "left",
+        bgcolor = "rgba(255,255,255,0.7)",
+        borderpad = 2
+      )
+    }
+
+    # pad axes so labels don't get clipped
+    rbi_vals <- site_meta$RBI
+    rcs_vals <- site_meta$recession_slope
+    rbi_pad <- diff(range(rbi_vals)) * 0.25
+    rcs_pad <- diff(range(rcs_vals)) * 0.25
+
+    p %>%
+      layout(
+        xaxis = list(title = list(text = "RBI", font = list(size = 10)),
+                     tickfont = list(size = 9), gridcolor = "#d4e3f0",
+                     range = list(min(rbi_vals) - rbi_pad, max(rbi_vals) + rbi_pad)),
+        yaxis = list(title = list(text = "RCS", font = list(size = 10)),
+                     tickfont = list(size = 9), gridcolor = "#d4e3f0",
+                     range = list(min(rcs_vals) - rcs_pad, max(rcs_vals) + rcs_pad)),
+        paper_bgcolor = plotly_bg$paper_bgcolor,
+        plot_bgcolor = plotly_bg$plot_bgcolor,
+        showlegend = FALSE,
+        annotations = label_annotations
       )
   })
 
   # --- RCS vs RBI scatter (all sites, filterable by snow category) ---------
 
   all_highlighted <- reactive({
-    c(input$highlight_rain, input$highlight_snow_dom)
+    c(selected_rain(), selected_snow())
   })
 
   output$rcs_rbi_plot <- renderPlotly({
@@ -1049,50 +1224,58 @@ server <- function(input, output, session) {
     p <- ggplot(
       plot_data,
       aes(x = RBI, y = recession_slope,
-          color = precip_regime, text = hover_text)
+          color = precip_regime, text = hover_text,
+          key = Stream_ID)
     ) +
       geom_point(size = 3, alpha = 0.5) +
       labs(
-        x = "Richards-Baker Flashiness Index (RBI)\n(higher = more flashy)",
-        y = "Recession Curve Slope (RCS)\n(higher = faster drainage)",
-        color = "Precipitation Regime"
+        x = "RBI",
+        y = "RCS",
+        color = NULL
       ) +
       base_plot_theme +
       scale_color_manual(values = regime_colors)
 
     if (any(plot_data$is_highlighted)) {
-      highlight_df <- filter(plot_data, is_highlighted)
-      highlight_text <- paste0(
-        "<b>", highlight_df$Stream_Name, "</b><br>",
-        "LTER: ", highlight_df$LTER, "<br>",
-        "Regime: ", highlight_df$precip_regime, "<br>",
-        "fSnow: ", round(highlight_df$snow_fraction * 100, 0), "%<br>",
-        "RBI: ", round(highlight_df$RBI, 3), "<br>",
-        "RCS: ", round(highlight_df$recession_slope, 3)
-      )
+      highlight_df <- filter(plot_data, is_highlighted) %>%
+        mutate(
+          hover = paste0(
+            "<b>", Stream_Name, "</b><br>",
+            "LTER: ", LTER, "<br>",
+            "Regime: ", precip_regime, "<br>",
+            "fSnow: ", round(snow_fraction * 100, 0), "%<br>",
+            "RBI: ", round(RBI, 3), "<br>",
+            "RCS: ", round(recession_slope, 3)
+          )
+        )
       p <- p +
         geom_point(
           data = highlight_df,
-          aes(text = highlight_text),
-          size = 5, alpha = 1, show.legend = FALSE
+          aes(x = RBI, y = recession_slope, color = precip_regime, text = hover),
+          size = 5, alpha = 1, show.legend = FALSE,
+          inherit.aes = FALSE
         ) +
         geom_text(
           data = highlight_df,
-          aes(label = Stream_Name),
+          aes(x = RBI, y = recession_slope, label = Stream_Name),
           hjust = -0.1, vjust = 0, size = 3,
-          show.legend = FALSE
+          show.legend = FALSE,
+          inherit.aes = FALSE
         )
     }
 
-    ggplotly(p, tooltip = "text") %>%
+    ggplotly(p, tooltip = "text", source = "rcs_rbi") %>%
       layout(
         paper_bgcolor = plotly_bg$paper_bgcolor,
         plot_bgcolor = plotly_bg$plot_bgcolor,
-        legend = list(orientation = "h", y = -0.15),
-        title = list(
-          text = "Do rain- and snow-dominated sites differ in flashiness?",
-          font = list(size = 12, color = "#666")
-        )
+        legend = list(
+          x = 0.98, y = 0.98,
+          xanchor = "right", yanchor = "top",
+          bgcolor = "rgba(255,255,255,0.8)",
+          bordercolor = "#d4e3f0",
+          borderwidth = 1
+        ),
+        title = FALSE
       )
   })
 
@@ -1359,11 +1542,12 @@ server <- function(input, output, session) {
     updateSelectInput(session, "cq_ts_site", choices = choices)
   })
 
-  # populate solute dropdown with available solutes
+  # update solute checkboxes to only show available solutes
   observe({
     available <- unique(cq_slopes_data()$variable)
     scatter_choices <- cq_solute_choices[cq_solute_choices %in% available]
-    updateSelectInput(session, "cq_solutes", choices = scatter_choices)
+    updateCheckboxGroupInput(session, "cq_solutes", choices = scatter_choices,
+                             selected = character(0))
   })
 
   # enforce max 3 sites
