@@ -879,9 +879,34 @@ server <- function(input, output, session) {
     req(input$map_lter, input$map_color_by)
 
     map_data <- harmonized_complete() %>%
-      filter(LTER %in% input$map_lter, !is.na(Latitude), !is.na(Longitude))
+      filter(LTER %in% input$map_lter, !is.na(Latitude), !is.na(Longitude)) %>%
+      filter(!is.na(.data[[input$map_color_by]]))
 
-    # 20 high-contrast colors for categorical variables with many levels
+    # clean up major_land labels: remove underscores, title case
+    if (input$map_color_by == "major_land") {
+      map_data <- map_data %>%
+        mutate(major_land = gsub("_", " ", major_land) %>% tools::toTitleCase())
+    }
+
+    color_var <- map_data[[input$map_color_by]]
+
+    # show snow fraction as percentage in popup
+    if (input$map_color_by == "snow_fraction") {
+      color_var <- color_var * 100
+    }
+
+    legend_titles <- c(
+      "Name" = "Climate Zone",
+      "snow_fraction" = "fSnow (%)",
+      "mean_annual_precip" = "MAP (mm)",
+      "RBI" = "RBI",
+      "recession_slope" = "RCS",
+      "major_land" = "LULC",
+      "LTER" = "LTER Network"
+    )
+    legend_title <- legend_titles[[input$map_color_by]]
+
+    # 20 high-contrast colors for categorical variables
     distinct_colors <- c(
       "#e41a1c",
       "#377eb8",
@@ -905,45 +930,58 @@ server <- function(input, output, session) {
       "#e7298a"
     )
 
-    map_data <- map_data %>% filter(!is.na(.data[[input$map_color_by]]))
+    # Choose color palette based on variable type
+    pal <- switch(
+      input$map_color_by,
 
-    # clean up major_land labels: remove underscores, title case
-    if (input$map_color_by == "major_land") {
-      map_data <- map_data %>%
-        mutate(major_land = gsub("_", " ", major_land) %>% tools::toTitleCase())
-    }
+      # Numeric variables
+      "mean_annual_precip" = colorNumeric(
+        RColorBrewer::brewer.pal(9, "Greens"),
+        domain = color_var
+      ),
+      "snow_fraction" = colorNumeric(
+        RColorBrewer::brewer.pal(9, "PuBu"),
+        domain = color_var
+      ),
+      "RBI" = colorNumeric(
+        RColorBrewer::brewer.pal(9, "YlOrRd"),
+        domain = color_var
+      ),
+      "recession_slope" = colorNumeric(
+        RColorBrewer::brewer.pal(9, "Oranges"),
+        domain = color_var
+      ),
 
-    color_var <- map_data[[input$map_color_by]]
-    # show snow fraction as percentage
-    if (input$map_color_by == "snow_fraction") {
-      color_var <- color_var * 100
-    }
+      # Qualitative variables
+      "Name" = colorFactor(
+        RColorBrewer::brewer.pal(12, "Set3"),
+        domain = color_var
+      ),
+      "major_land" = colorFactor(
+        palette = c(
+          "Forest" = "#2e7d32",
+          "Grassland" = "#a5d6a7",
+          "Cropland" = "#fbc02d",
+          "Urban" = "#9e9e9e",
+          "Wetlands" = "#26a69a",
+          "Shrubland" = "#8d6e63",
+          "Barren" = "#d7ccc8",
+          "Water" = "#42a5f5"
+        ),
+        domain = color_var
+      ),
 
-    legend_titles <- c(
-      "Name" = "Climate Zone",
-      "snow_fraction" = "fSnow (%)",
-      "mean_annual_precip" = "MAP (mm)",
-      "RBI" = "RBI",
-      "recession_slope" = "RCS",
-      "major_land" = "LULC",
-      "LTER" = "LTER Network"
+      # Default for categorical variables (like LTER)
+      {
+        colorFactor(
+          palette = rep(
+            distinct_colors,
+            length.out = length(unique(color_var))
+          ),
+          domain = color_var
+        )
+      }
     )
-    legend_title <- legend_titles[[input$map_color_by]]
-
-    if (
-      input$map_color_by %in%
-        c("RBI", "recession_slope", "snow_fraction", "mean_annual_precip")
-    ) {
-      pal <- colorNumeric(
-        palette = c("#d67e7e", "#e6c79c", "#7fb069", "#6b9bd1", "#5a7fa8"),
-        domain = color_var
-      )
-    } else {
-      pal <- colorFactor(
-        palette = distinct_colors,
-        domain = color_var
-      )
-    }
 
     leaflet(map_data) %>%
       addTiles() %>%
@@ -974,8 +1012,7 @@ server <- function(input, output, session) {
           "<br>",
           "Snow Fraction: ",
           round(snow_fraction * 100, 0),
-          "%",
-          "<br>",
+          "%<br>",
           "Mean Annual Precip: ",
           round(mean_annual_precip, 1),
           " mm"
@@ -1152,7 +1189,7 @@ server <- function(input, output, session) {
             text = "Q (cms)",
             xref = "paper",
             yref = "paper",
-            x = -0.04,
+            x = -0.1,
             y = 0.5,
             showarrow = FALSE,
             textangle = -90,
