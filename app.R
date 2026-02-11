@@ -220,7 +220,7 @@ ui <- page_navbar(
         ),
         checkboxGroupInput(
           "show_regime_categories",
-          "Display:",
+          "Precipitation Regime:",
           choices = c(
             "Rain-dominated" = "Rain-dominated",
             "Snow-dominated" = "Snow-dominated"
@@ -316,17 +316,6 @@ ui <- page_navbar(
                   (fSnow > 25%). Compare the flashiness and recession
                   behavior of all four."
                 ),
-                hr(),
-                tags$p(HTML(
-                  "<b>Flashiness:</b> How rapidly does the hydrograph
-                  rise and fall? Rain-dominated basins tend to produce
-                  sharper peaks and faster recessions."
-                )),
-                tags$p(HTML(
-                  "<b>Recession:</b> How long does it take for discharge to
-                  return to baseflow after a peak? The length of the recession
-                  period reflects subsurface storage capacity."
-                )),
                 hr(),
                 tags$p(
                   style = "color: #444;",
@@ -430,16 +419,6 @@ ui <- page_navbar(
                   and transport."
                 )),
                 hr(),
-                tags$p(HTML(
-                  "<b>Common sources of elevated Cl:</b>"
-                )),
-                tags$ul(
-                  tags$li("Road salt application"),
-                  tags$li("Agricultural inputs"),
-                  tags$li("Wastewater and septic"),
-                  tags$li("Marine aerosol influence")
-                ),
-                hr(),
                 tags$p(
                   style = "color: #444;",
                   HTML(
@@ -470,15 +449,7 @@ ui <- page_navbar(
                   "Choose a few sites from different regions. Look at
                   how Cl varies over the course of a year."
                 ),
-                hr(),
-                tags$p(HTML(
-                  "<b>Winter Cl peaks</b> often indicate road salt
-                  runoff, especially in urban or suburban catchments."
-                )),
-                tags$p(HTML(
-                  "<b>Summer Cl peaks</b> may reflect concentration during
-                  low-flow periods when dilution is reduced."
-                )),
+
                 hr(),
                 tags$p(HTML(
                   "Toggle <b>discharge overlay</b> to see the relationship
@@ -703,7 +674,7 @@ ui <- page_navbar(
                 hr(),
                 tags$p(HTML(
                   "The dashed lines at <b>&plusmn;0.1</b> mark the boundaries
-                  between behavioral regimes:"
+                  between C-Q behaviors:"
                 )),
                 tags$ul(
                   tags$li(HTML(
