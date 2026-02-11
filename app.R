@@ -13,7 +13,7 @@ suppressPackageStartupMessages({
   librarian::shelf(shiny, bslib, dplyr, ggplot2, leaflet, plotly, viridis)
 })
 
-data_path <- "/Users/sidneybush/Library/CloudStorage/Box-Box/Hydrology_Lab/CUAHSI-teaching-modules-shiny/data"
+data_path <- "data"
 
 # shared palette — keeps colors consistent between the map, plots, and UI
 module_colors <- c(
@@ -42,12 +42,8 @@ base_plot_theme <- theme_minimal(base_family = "Work Sans") +
 
 plotly_bg <- list(paper_bgcolor = "#fefcfb", plot_bgcolor = "#ffffff")
 
-# load discharge once at startup — 269 MB so we use fread for speed
-discharge_global <- data.table::fread(
-  file.path(data_path, "discharge_north_america.csv")
-) %>%
-  as.data.frame() %>%
-  mutate(Date = as.Date(Date))
+# load pre-processed data at startup
+discharge_global <- readRDS(file.path(data_path, "discharge.rds"))
 
 
 # --- UI -------------------------------------------------------------------
@@ -705,17 +701,11 @@ ui <- page_navbar(
 
 server <- function(input, output, session) {
   harmonized_complete <- reactive({
-    read.csv(
-      file.path(data_path, "harmonized_north_america_complete.csv"),
-      stringsAsFactors = FALSE
-    )
+    readRDS(file.path(data_path, "harmonized_complete.rds"))
   })
 
   harmonized_partial <- reactive({
-    read.csv(
-      file.path(data_path, "harmonized_north_america_partial.csv"),
-      stringsAsFactors = FALSE
-    )
+    readRDS(file.path(data_path, "harmonized_partial.rds"))
   })
 
   discharge_data <- reactive({
@@ -1474,10 +1464,7 @@ server <- function(input, output, session) {
   })
 
   cl_monthly <- reactive({
-    read.csv(
-      file.path(data_path, "cl_monthly_summary.csv"),
-      stringsAsFactors = FALSE
-    )
+    readRDS(file.path(data_path, "cl_monthly.rds"))
   })
 
   # monthly mean discharge per site (reuses the already-loaded discharge data)
@@ -1744,18 +1731,11 @@ server <- function(input, output, session) {
   # --- Activity 3: C-Q Analysis -----------------------------------------------
 
   cq_paired_data <- reactive({
-    read.csv(
-      file.path(data_path, "cq_paired_obs.csv"),
-      stringsAsFactors = FALSE
-    ) %>%
-      mutate(date = as.Date(date))
+    readRDS(file.path(data_path, "cq_paired.rds"))
   })
 
   cq_slopes_data <- reactive({
-    read.csv(
-      file.path(data_path, "cq_slopes.csv"),
-      stringsAsFactors = FALSE
-    )
+    readRDS(file.path(data_path, "cq_slopes.rds"))
   })
 
   cq_solute_choices <- c(
