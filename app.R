@@ -1463,6 +1463,17 @@ server <- function(input, output, session) {
     )
     legend_title <- legend_labels[[color_var_name]]
 
+    # ---- palette mapping ---------------------------------------------------
+    palette_map <- list(
+      "mean_Cl_uM" = viridis::viridis(256),
+      "land_cropland" = RColorBrewer::brewer.pal(9, "YlGn"),
+      "land_urban_and_built_up_land" = RColorBrewer::brewer.pal(9, "OrRd"),
+      "mean_annual_precip" = RColorBrewer::brewer.pal(9, "Blues")
+    )
+
+    pal_colors <- palette_map[[color_var_name]]
+    # -----------------------------------------------------------------------
+
     map_data <- map_data %>% filter(!is.na(.data[[color_var_name]]))
     color_vals <- map_data[[color_var_name]]
 
