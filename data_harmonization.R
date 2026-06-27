@@ -354,6 +354,11 @@ yearly_snow_day_cols <- grep(
   names(spatial_drivers_raw),
   value = TRUE
 )
+yearly_snow_peak_cols <- grep(
+  "^snow_[0-9]{4}_max_prop_area$",
+  names(spatial_drivers_raw),
+  value = TRUE
+)
 monthly_snow_cover_cols <- grep(
   "^snow_(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)_avg_prop_area$",
   names(spatial_drivers_raw),
@@ -374,11 +379,13 @@ climate_summary_data <- spatial_drivers_raw %>%
     } else {
       mean_snow_days / 365
     },
-    mean_snow_prop_area = safe_mean_numeric(
-      c_across(matches("snow_[0-9]{4}_max_prop_area"))
+    # Mean Peak Snow Cover: mean of the annual maximum snow-covered
+    # watershed proportion.
+    mean_peak_snow_prop_area = safe_mean_numeric(
+      c_across(any_of(yearly_snow_peak_cols))
     ),
     peak_snow_prop_area = safe_max_numeric(
-      c_across(matches("snow_[0-9]{4}_max_prop_area"))
+      c_across(any_of(yearly_snow_peak_cols))
     )
   ) %>%
   ungroup() %>%
@@ -389,7 +396,7 @@ climate_summary_data <- spatial_drivers_raw %>%
     mean_annual_evapotrans,
     mean_snow_days,
     snow_cover,
-    mean_snow_prop_area,
+    mean_peak_snow_prop_area,
     peak_snow_prop_area,
     all_of(monthly_snow_cover_cols)
   )
@@ -459,7 +466,7 @@ complete_cases <- harmonized_data %>%
     !is.na(recession_slope),
     !is.na(ClimateZ),
     !is.na(mean_annual_precip),
-    !is.na(snow_cover),
+    !is.na(mean_peak_snow_prop_area),
     !is.na(major_land)
   )
 
