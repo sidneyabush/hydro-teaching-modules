@@ -1495,8 +1495,7 @@ ui <- page_navbar(
             "MAT (°C)" = "mean_annual_temp",
             "Mean Annual ET (kg/m²)" = "mean_annual_evapotrans",
             "Mean Peak Snow Cover (%)" = "mean_peak_snow_prop_area",
-            "RBI" = "RBI",
-            "RCS" = "recession_slope"
+            "RBI" = "RBI"
           ),
           selected = "Name"
         )
@@ -1536,9 +1535,6 @@ ui <- page_navbar(
             )),
             tags$li(HTML(
               "<span style='font-weight:700;'>Richards-Baker Flashiness Index</span> (RBI): Measures how rapidly streamflow changes over time"
-            )),
-            tags$li(HTML(
-              "<span style='font-weight:700;'>Recession-curve Slope</span> (RCS): Characterizes subsurface heterogeneity"
             ))
           )
         )
@@ -1691,8 +1687,9 @@ ui <- page_navbar(
           ),
           p(
             "Choose a North America background map and compare it with the
-            mean chloride points plotted on top. Click up to four site markers
-            to carry them into the seasonal chloride and discharge panel.",
+            mean chloride points plotted on top. Hover over a marker for site
+            information, and click up to four markers to carry them into the
+            seasonal chloride and discharge panel.",
             style = "font-size: 0.85em; color: #666;"
           )
         ),
@@ -1772,11 +1769,11 @@ ui <- page_navbar(
               "MAT (°C)" = "mean_annual_temp",
               "Mean Annual ET (kg/m²)" = "mean_annual_evapotrans",
               "Mean Peak Snow Cover (%)" = "mean_peak_snow_prop_area",
-              "RBI" = "RBI",
-              "RCS" = "recession_slope"
+              "RBI" = "RBI"
             ),
             selected = "Name"
-          )
+          ),
+          uiOutput("cq_map_selected_site_label")
         ),
 
         # time series controls
@@ -1823,6 +1820,21 @@ ui <- page_navbar(
             "Solutes:",
             choices = c("Chloride (Cl)" = "Cl", "Nitrate (NO3)" = "NO3"),
             selected = character(0)
+          ),
+          tags$div(
+            style = paste(
+              "margin-top: 1rem; padding: 0.85rem 0.95rem;",
+              "border: 1px solid #d7e3ea; border-radius: 12px;",
+              "background: rgba(255,255,255,0.78);",
+              "font-size: 0.84rem; line-height: 1.5; color: #31424c;"
+            ),
+            tags$div(
+              "C-Q slope interpretation",
+              style = "font-weight: 700; margin-bottom: 0.35rem; color: #24323d;"
+            ),
+            tags$div("Dilution < -0.1"),
+            tags$div("-0.1 < Chemostatic < 0.1"),
+            tags$div("Mobilizing > 0.1")
           )
         ),
 
@@ -1846,17 +1858,43 @@ ui <- page_navbar(
         id = "activity3_tab",
         nav_panel(
           "Site Map",
-          card(
-            full_screen = TRUE,
-            card_header("Choose a Site from the Map"),
-            tags$p(
-              "Interactive map of Activity 3 sites. Click a site to carry it into the Activity 3 tabs.",
-              class = "visually-hidden"
+          layout_columns(
+            col_widths = c(8, 4),
+            card(
+              full_screen = TRUE,
+              card_header("Choose a Site from the Map"),
+              tags$p(
+                "Interactive map of Activity 3 sites. Click a site to carry it into the Activity 3 tabs.",
+                class = "visually-hidden"
+              ),
+              leafletOutput("cq_site_map", height = 600)
             ),
-            tags$div(
-              style = "display: flex; flex-direction: column; gap: 0.35rem;",
-              leafletOutput("cq_site_map", height = 600),
-              uiOutput("cq_map_selected_site_label")
+            card(
+              card_header("Key Metrics"),
+              tags$ul(
+                style = "font-size: 0.9em; line-height: 1.6; padding-left: 18px;",
+                tags$li(HTML(
+                  "<span style='font-weight:700;'>Climate Zone</span>: Koppen-Geiger climate classification"
+                )),
+                tags$li(HTML(
+                  "<span style='font-weight:700;'>Land-use / Land-cover</span> (LULC): Dominant land cover type within the watershed"
+                )),
+                tags$li(HTML(
+                  "<span style='font-weight:700;'>Mean Annual Precipitation</span> (MAP, mm): Average yearly precipitation across the watershed"
+                )),
+                tags$li(HTML(
+                  "<span style='font-weight:700;'>Mean Annual Temperature</span> (MAT, °C): Average yearly temperature across the watershed"
+                )),
+                tags$li(HTML(
+                  "<span style='font-weight:700;'>Mean Annual Evapotranspiration</span> (kg/m²): Average yearly evapotranspiration across the watershed"
+                )),
+                tags$li(HTML(
+                  "<span style='font-weight:700;'>Mean Peak Snow Cover</span> (%): Average of the annual maximum percent of watershed area covered by snow"
+                )),
+                tags$li(HTML(
+                  "<span style='font-weight:700;'>Richards-Baker Flashiness Index</span> (RBI): Measures how rapidly streamflow changes over time"
+                ))
+              )
             )
           )
         ),
@@ -2801,8 +2839,9 @@ server <- function(input, output, session) {
     if (is.null(selected_id) || !nzchar(selected_id)) {
       return(
         tags$div(
-          style = "padding: 0 10px 10px 10px; font-size: 0.84rem; color: #5d6d76;",
-          "Click a site on the map to select it."
+          style = "margin-top: 0.8rem; font-size: 0.84rem; color: #5d6d76;",
+          tags$strong("Selected site: "),
+          "none"
         )
       )
     }
@@ -2818,16 +2857,12 @@ server <- function(input, output, session) {
     }
 
     tags$div(
-      style = "padding: 0 10px 10px 10px; font-size: 0.84rem; color: #31424c;",
-      HTML(
-        paste0(
-          "<b>Selected from map:</b> ",
-          selected_site$Stream_Name,
-          " [",
-          selected_site$LTER,
-          "]"
-        )
-      )
+      style = "margin-top: 0.8rem; font-size: 0.84rem; color: #31424c;",
+      tags$strong("Selected site: "),
+      selected_site$Stream_Name,
+      " [",
+      selected_site$LTER,
+      "]"
     )
   })
 
@@ -3760,14 +3795,18 @@ server <- function(input, output, session) {
         opacity = 0.85,
         fillOpacity = 0.78,
         layerId = ~Stream_ID,
-        popup = ~ paste0(
-          "<b>",
-          Stream_Name,
-          "</b><br>",
-          "Mean Cl: ",
-          round(mean_Cl_mgL, 1),
-          " mg/L"
-        )
+        label = ~ lapply(
+          paste0(
+            "<b>",
+            Stream_Name,
+            "</b><br>",
+            "Mean Cl: ",
+            round(mean_Cl_mgL, 1),
+            " mg/L"
+          ),
+          HTML
+        ),
+        labelOptions = labelOptions(direction = "auto", opacity = 0.96)
       )
 
     if (nrow(selected_marker_data) > 0) {
@@ -3783,14 +3822,18 @@ server <- function(input, output, session) {
           opacity = 1,
           fillOpacity = 0.92,
           layerId = ~Stream_ID,
-          popup = ~ paste0(
-            "<b>",
-            Stream_Name,
-            "</b><br>",
-            "Mean Cl: ",
-            round(mean_Cl_mgL, 1),
-            " mg/L<br>Selected"
-          )
+          label = ~ lapply(
+            paste0(
+              "<b>",
+              Stream_Name,
+              "</b><br>",
+              "Mean Cl: ",
+              round(mean_Cl_mgL, 1),
+              " mg/L<br>Selected"
+            ),
+            HTML
+          ),
+          labelOptions = labelOptions(direction = "auto", opacity = 0.96)
         )
     }
 
@@ -4779,7 +4822,7 @@ server <- function(input, output, session) {
           list(
             x = 0.1,
             y = y_max * 0.95,
-            text = "Enrichment \u2192",
+            text = "Mobilizing \u2192",
             showarrow = FALSE,
             xanchor = "left",
             font = list(size = 12, color = "#666"),
